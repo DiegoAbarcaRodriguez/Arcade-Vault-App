@@ -1,6 +1,6 @@
 # Spec 01 — Vistas MVP de Arcade Vault
 
-- **Estado:** Draft
+- **Estado:** Aprobado
 - **Depende de:** Ninguno (primer spec del proyecto)
 - **Fecha:** 2026-07-26
 - **Objetivo:** Construir las 5 pantallas de Arcade Vault (Biblioteca, Detalle, Reproductor, Auth, Salón de la Fama) como vistas Next.js navegables con datos mock y el tema visual retro-arcade del prototipo, sin lógica de negocio real (sin auth, sin persistencia, sin juegos jugables).
