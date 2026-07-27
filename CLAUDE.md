@@ -13,14 +13,8 @@ This project uses **Next.js 16.2.11**, which has breaking changes vs. older Next
 - Middleware has been renamed to **Proxy**: create `proxy.ts` at the project root (not `middleware.ts`), exporting a `proxy` function instead of `middleware`. See `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
 - Docs are organized under `node_modules/next/dist/docs/01-app/` (this project uses the App Router, not Pages Router) — check the relevant subsection (e.g. `03-api-reference/05-config/01-next-config-js/` for config options) before using any Next.js API you're not certain about in this version.
 
-## Commands
-
-- `npm run dev` — start dev server (Turbopack)
-- `npm run build` — production build
-- `npm start` — run production build
-- `npm run lint` — ESLint (flat config via `eslint.config.mjs`, uses `eslint-config-next`'s `core-web-vitals` + `typescript` rule sets)
-
-There is no test runner configured yet.
+## Skills
+Usa siempre /frontend-design para disenar la interfaz de usuario.
 
 ## Architecture
 
