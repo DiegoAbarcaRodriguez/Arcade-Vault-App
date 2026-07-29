@@ -16,6 +16,9 @@ This project uses **Next.js 16.2.11**, which has breaking changes vs. older Next
 ## Skills
 Usa siempre /frontend-design para disenar la interfaz de usuario.
 
+## Herramientas MCP
+Todos los screenshots generados por el MCP de Playwright deben ser almacenados en `.playwright-screenshots/`.
+
 ## Architecture
 
 - App Router (`app/`) with TypeScript, React 19.
