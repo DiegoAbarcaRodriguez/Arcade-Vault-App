@@ -1,6 +1,6 @@
 # Spec 03 — Página "Acerca de" + Contacto con envío real de email
 
-- **Estado:** Draft
+- **Estado:** Approved
 - **Depende de:** 02-home-page
 - **Fecha:** 2026-07-29
 - **Objetivo:** Crear la página "Acerca de" en `/acerca-de` (misión + highlights, portados de `about.jsx`) con un formulario de contacto funcional que envía un email real a través de Resend a `abarcarodriguezdiego@gmail.com` mediante un Server Action.
