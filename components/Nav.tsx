@@ -13,6 +13,7 @@ export default function Nav() {
     if (href === "/biblioteca") {
       return pathname.startsWith("/biblioteca") || pathname.startsWith("/juego") || pathname.startsWith("/jugar");
     }
+    if (href === "/acerca-de") return pathname === "/acerca-de";
     return pathname.startsWith(href);
   };
 
@@ -37,7 +38,9 @@ export default function Nav() {
           <Link href="/salon" className={isActive("/salon") ? "active" : ""}>
             Salón de la Fama
           </Link>
-          <Link href="#">Acerca de</Link>
+          <Link href="/acerca-de" className={isActive("/acerca-de") ? "active" : ""}>
+            Acerca de
+          </Link>
         </div>
         <div className="spacer"></div>
         <div className="coin-counter">
@@ -66,7 +69,7 @@ export default function Nav() {
         <Link href="/salon" className={isActive("/salon") ? "active" : ""} onClick={close}>
           Salón de la Fama
         </Link>
-        <Link href="#" onClick={close}>
+        <Link href="/acerca-de" className={isActive("/acerca-de") ? "active" : ""} onClick={close}>
           Acerca de
         </Link>
         <Link href="/auth" className={isActive("/auth") ? "active" : ""} onClick={close}>
