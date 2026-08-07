@@ -18,6 +18,7 @@ export default function GamePlayer({ game }: { game: Game }) {
   const autoPausedRef = useRef(false);
   const playerRef = useRef<HTMLDivElement>(null);
   const crtRef = useRef<HTMLDivElement>(null);
+  const crtScreenRef = useRef<HTMLDivElement>(null);
   const isAsteroids = game.id === "asteroides";
 
   // Ajusta el tamaño del CRT en tiempo real según el espacio real
@@ -116,7 +117,15 @@ export default function GamePlayer({ game }: { game: Game }) {
 
   const handleFullscreen = () => {
     if (!isAsteroids) return;
-    gameRef.current?.requestFullscreen();
+    // Se pide fullscreen sobre .crt-screen (no sobre el canvas del juego):
+    // ese contenedor incluye tanto el canvas como TouchControls, así los
+    // controles táctiles siguen visibles en mobile dentro de la pantalla
+    // completa.
+    crtScreenRef.current?.requestFullscreen?.().catch(() => {
+      // La Fullscreen API puede rechazar (navegador sin soporte, falta de
+      // gesto de usuario, permisos de iframe, etc.): el juego sigue
+      // jugable en tamaño normal, no hace falta manejarlo más.
+    });
   };
 
   const handleFin = () => {
@@ -190,7 +199,7 @@ export default function GamePlayer({ game }: { game: Game }) {
       </div>
 
       <div className="crt" ref={crtRef}>
-        <div className="crt-screen">
+        <div className="crt-screen" ref={crtScreenRef}>
           {isAsteroids ? (
             <>
               <AsteroidsGame ref={gameRef} onHudChange={setHud} />

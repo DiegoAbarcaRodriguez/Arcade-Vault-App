@@ -17,7 +17,6 @@ export interface AsteroidsHudState {
 export interface AsteroidsGameHandle {
   togglePause: () => void;
   forceGameOver: () => void; // usado por el botón FIN tras confirmar
-  requestFullscreen: () => void; // usado por el botón de pantalla completa
 }
 
 interface AsteroidsGameProps {
@@ -46,12 +45,10 @@ const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
     const controlsRef = useRef<AsteroidsGameHandle>({
       togglePause: () => {},
       forceGameOver: () => {},
-      requestFullscreen: () => {},
     });
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
-      requestFullscreen: () => controlsRef.current.requestFullscreen(),
     }));
 
     useEffect(() => {
@@ -659,15 +656,11 @@ const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
         }
       }
 
-      // ── Controles externos (PAUSA / FIN / pantalla completa) ────────────
-      controlsRef.current.requestFullscreen = () => {
-        canvas.requestFullscreen?.().catch(() => {
-          // La Fullscreen API puede rechazar (navegador sin soporte, falta
-          // de gesto de usuario, permisos de iframe, etc.): el juego sigue
-          // jugable en tamaño normal, no hace falta manejarlo más.
-        });
-      };
-
+      // ── Controles externos (PAUSA / FIN) ─────────────────────────────────
+      // La pantalla completa la maneja GamePlayer.tsx directamente sobre el
+      // contenedor .crt-screen (no sobre este canvas): así entran a la
+      // capa de fullscreen tanto el canvas como los TouchControls, que son
+      // hermanos suyos en el DOM.
       controlsRef.current.togglePause = () => {
         if (phase === "playing") {
           phase = "paused";
