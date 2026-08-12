@@ -1,6 +1,6 @@
 # Spec 06 — Leaderboard y tabla de juegos en Supabase
 
-- **Estado:** Approved
+- **Estado:** Implemented
 - **Depende de:** 04-supabase-setup (clientes de Supabase), 05-asteroids-jugable (único juego jugable)
 - **Fecha:** 2026-08-07
 - **Objetivo:** Migrar `GAMES` desde `lib/data.ts` a tablas reales en Supabase (`games` + `scores`), calcular `best`/`plays` en vivo desde los puntajes reales, y conectar el flujo completo del leaderboard de Asteroids —pedir nombre al terminar la partida, guardar el puntaje, y mostrarlo en `/juego/[id]` y en un `/salon` con tabs funcionales— dejando el resto de los juegos con un estado vacío ("sé el primero en registrar un puntaje") hasta que sean jugables.
@@ -163,6 +163,10 @@ export async function submitScore(
 - **Server Components `async` con fetch directo a Supabase en cada request, sin ISR/`revalidate`.** Motivo: decisión explícita del usuario — más simple de razonar mientras el tráfico es bajo; se puede agregar cacheo en un spec futuro si hace falta.
 - **Tabs de `/salon` funcionales vía `searchParams` (`?game=<id>`) y `<Link>`, en vez de estado de cliente.** Motivo: mismo patrón Server Component ya usado en el resto de la app (spec 01-05 no introducen client state para navegación); evita convertir `/salon` en Client Component solo para alternar de juego.
 - **`ACTIVITY_TICKER`/`TOP_PLAYERS_TODAY` del Home quedan fuera de alcance.** Motivo: decisión explícita del usuario (implícita en el alcance acordado) — son un widget decorativo de marketing con su propio mock (`app/(home)/data.ts`), sin relación con la tabla `scores` real que pide este spec.
+
+### Enmienda posterior a la implementación inicial
+
+- **Los 8 juegos no jugables se sacaron por completo de `games` (Supabase) y de la UI (Home/Biblioteca/Salón), en vez de quedar visibles con estado vacío.** Motivo: decisión explícita del usuario tras ver la implementación — solo quiere que se muestre Asteroids, el único juego realmente jugable hoy. Su metadata original queda preservada como referencia (no usada por la app) en `lib/archived-games.ts`, con instrucciones para volver a insertarlos en `games` cuando tengan su propio spec de implementación. Esto reemplaza la decisión original de "Solo Asteroids participa del leaderboard real; los otros 8 juegos quedan en estado vacío indefinido".
 
 ## Riesgos identificados
 

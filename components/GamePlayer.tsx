@@ -1,18 +1,26 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
-import type { Game } from "@/lib/data";
+import type { GameWithStats } from "@/lib/supabase/queries";
+import { submitScore } from "@/lib/supabase/actions";
 import AsteroidsGame, {
   type AsteroidsGameHandle,
   type AsteroidsHudState,
 } from "@/components/AsteroidsGame";
 import TouchControls from "@/components/TouchControls";
 
-export default function GamePlayer({ game }: { game: Game }) {
+export default function GamePlayer({ game }: { game: GameWithStats }) {
   const [hud, setHud] = useState<AsteroidsHudState | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const gameRef = useRef<AsteroidsGameHandle>(null);
+
+  // Estado de la pantalla "guardar puntaje" que aparece en GAME OVER.
+  const [scoreName, setScoreName] = useState("");
+  const [scoreSaved, setScoreSaved] = useState(false);
+  const [scoreDismissed, setScoreDismissed] = useState(false);
+  const [savingScore, setSavingScore] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Recuerda si nosotros pausamos el juego solo para mostrar el modal de
   // FIN, para no reanudarlo si ya estaba pausado por el jugador antes.
   const autoPausedRef = useRef(false);
@@ -109,6 +117,33 @@ export default function GamePlayer({ game }: { game: Game }) {
   const score = isAsteroids ? (hud?.score ?? 0) : 0;
   const lives = isAsteroids ? (hud?.lives ?? 3) : 3;
   const level = isAsteroids ? (hud?.level ?? 1) : 1;
+
+  // Cada vez que se sale de "gameover" (reinicio de partida), reseteamos la
+  // pantalla de guardado de puntaje para que la próxima partida vuelva a
+  // pedir nombre desde cero.
+  useEffect(() => {
+    if (hud?.phase !== "gameover") {
+      setScoreName("");
+      setScoreSaved(false);
+      setScoreDismissed(false);
+      setSavingScore(false);
+      setSaveError(null);
+    }
+  }, [hud?.phase]);
+
+  const handleSaveScore = async () => {
+    if (!scoreName.trim() || savingScore) return;
+    setSavingScore(true);
+    setSaveError(null);
+    try {
+      await submitScore(game.id, scoreName, score);
+      setScoreSaved(true);
+    } catch {
+      setSaveError("No se pudo guardar el puntaje. Intentá de nuevo.");
+    } finally {
+      setSavingScore(false);
+    }
+  };
 
   const handlePause = () => {
     if (!isAsteroids) return;
@@ -251,6 +286,73 @@ export default function GamePlayer({ game }: { game: Game }) {
                 NO
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isAsteroids && hud?.phase === "gameover" && !scoreDismissed && (
+        <div className="modal-bd">
+          <div className="modal">
+            <h2>GAME OVER</h2>
+            <div className="final-label">PUNTAJE FINAL</div>
+            <div className="final">{score.toLocaleString("es-ES")}</div>
+            {scoreSaved ? (
+              <>
+                <div className="toast-saved">PUNTAJE GUARDADO</div>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => setScoreDismissed(true)}
+                  >
+                    CERRAR
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="input-row">
+                  <input
+                    type="text"
+                    value={scoreName}
+                    onChange={(e) => setScoreName(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onKeyUp={(e) => e.stopPropagation()}
+                    maxLength={12}
+                    placeholder="TUS INICIALES"
+                    autoFocus
+                  />
+                </div>
+                {saveError && (
+                  <p
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 12,
+                      color: "var(--magenta)",
+                    }}
+                  >
+                    {saveError}
+                  </p>
+                )}
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="btn magenta"
+                    onClick={handleSaveScore}
+                    disabled={!scoreName.trim() || savingScore}
+                  >
+                    {savingScore ? "GUARDANDO..." : "GUARDAR PUNTAJE"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => setScoreDismissed(true)}
+                  >
+                    OMITIR
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

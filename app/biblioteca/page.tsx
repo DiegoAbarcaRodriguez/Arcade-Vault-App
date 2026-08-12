@@ -1,7 +1,10 @@
 import GameCard from "@/components/GameCard";
-import { CATS, GAMES } from "@/lib/data";
+import { CATS } from "@/lib/data";
+import { listGames } from "@/lib/supabase/queries";
 
-export default function Library() {
+export default async function Library() {
+  const games = await listGames();
+
   return (
     <div className="fade-in">
       <section className="av-hero">
@@ -18,7 +21,10 @@ export default function Library() {
         </div>
         <div className="av-chips">
           {CATS.map((c) => (
-            <button key={c} className={"chip" + (c === "TODOS" ? " active" : "")}>
+            <button
+              key={c}
+              className={"chip" + (c === "TODOS" ? " active" : "")}
+            >
               {c}
             </button>
           ))}
@@ -26,7 +32,7 @@ export default function Library() {
       </div>
 
       <div className="av-grid">
-        {GAMES.map((g) => (
+        {games.map((g) => (
           <GameCard key={g.id} game={g} />
         ))}
       </div>
