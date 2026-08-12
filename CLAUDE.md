@@ -14,9 +14,11 @@ This project uses **Next.js 16.2.11**, which has breaking changes vs. older Next
 - Docs are organized under `node_modules/next/dist/docs/01-app/` (this project uses the App Router, not Pages Router) — check the relevant subsection (e.g. `03-api-reference/05-config/01-next-config-js/` for config options) before using any Next.js API you're not certain about in this version.
 
 ## Skills
+
 Usa siempre /frontend-design para disenar la interfaz de usuario.
 
 ## Herramientas MCP
+
 Todos los screenshots generados por el MCP de Playwright deben ser almacenados en `.playwright-screenshots/`.
 
 ## Architecture
@@ -35,3 +37,9 @@ This project follows spec-driven design via the `/spec` and `/spec-impl` skills 
 3. **`/spec-impl <NN-slug>`** — refuses to run unless the spec's state means "Approved". If approved, creates/switches to branch `spec-NN-slug` (controlled by `AutoCreateBranch` in `specs/.spec-config.yml`, default `true`), then implements the plan one step at a time, pausing for review after each step.
 
 The `specs/` directory does not exist yet — it will be created the first time `/spec` saves a spec. When picking up work in this repo, check `specs/` for existing specs and their state before starting new feature work.
+
+### Adding a new playable game
+
+Games are wired through a shared multi-game contract: `components/games/registry.ts` (`GameHudState`, `GameHandle`, `GAME_REGISTRY`) lets `components/GamePlayer.tsx` mount any registered game generically (HUD sync, PAUSA/FIN, fullscreen, and the Supabase score-saving flow are all game-agnostic). Adding a game means implementing `components/<Game>Game.tsx` against that contract, adding its row to the `games` table in Supabase, and registering it in `GAME_REGISTRY`.
+
+**`/add-game <resources/ folder | game description>`** — a project skill (`.agents/skills/add-game/SKILL.md`, duplicated in `.claude/skills/add-game/`) that designs the spec for a new game: it ports an existing prototype from `resources/` (e.g. `03-tetris`, `04-arkanoid`) or takes a from-scratch description, asks the adaptation questions the contract requires (aspect ratio, HUD mapping, controls, assets, `games` row metadata), and saves `specs/NN-slug.md` in `Draft` state — same house style as `/spec`. It never writes code; run `/spec-impl NN-slug` afterward to implement it. See `.agents/skills/add-game/reference.md` for the exact contracts and file patterns it relies on.

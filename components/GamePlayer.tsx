@@ -4,16 +4,16 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameWithStats } from "@/lib/supabase/queries";
 import { submitScore } from "@/lib/supabase/actions";
-import AsteroidsGame, {
-  type AsteroidsGameHandle,
-  type AsteroidsHudState,
-} from "@/components/AsteroidsGame";
-import TouchControls from "@/components/TouchControls";
+import {
+  GAME_REGISTRY,
+  type GameHandle,
+  type GameHudState,
+} from "@/components/games/registry";
 
 export default function GamePlayer({ game }: { game: GameWithStats }) {
-  const [hud, setHud] = useState<AsteroidsHudState | null>(null);
+  const [hud, setHud] = useState<GameHudState | null>(null);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
-  const gameRef = useRef<AsteroidsGameHandle>(null);
+  const gameRef = useRef<GameHandle>(null);
 
   // Estado de la pantalla "guardar puntaje" que aparece en GAME OVER.
   const [scoreName, setScoreName] = useState("");
@@ -27,7 +27,10 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   const playerRef = useRef<HTMLDivElement>(null);
   const crtRef = useRef<HTMLDivElement>(null);
   const crtScreenRef = useRef<HTMLDivElement>(null);
-  const isAsteroids = game.id === "asteroides";
+  const entry = GAME_REGISTRY[game.id];
+  const isPlayable = Boolean(entry);
+  const showLives = entry?.showLives ?? true;
+  const showLevel = entry?.showLevel ?? true;
 
   // Ajusta el tamaño del CRT en tiempo real según el espacio real
   // disponible (medido, no adivinado): así entra completo sin scroll y
@@ -114,9 +117,9 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
     };
   }, []);
 
-  const score = isAsteroids ? (hud?.score ?? 0) : 0;
-  const lives = isAsteroids ? (hud?.lives ?? 3) : 3;
-  const level = isAsteroids ? (hud?.level ?? 1) : 1;
+  const score = isPlayable ? (hud?.score ?? 0) : 0;
+  const lives = isPlayable ? (hud?.lives ?? 3) : 3;
+  const level = isPlayable ? (hud?.level ?? 1) : 1;
 
   // Cada vez que se sale de "gameover" (reinicio de partida), reseteamos la
   // pantalla de guardado de puntaje para que la próxima partida vuelva a
@@ -146,12 +149,12 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   };
 
   const handlePause = () => {
-    if (!isAsteroids) return;
+    if (!isPlayable) return;
     gameRef.current?.togglePause();
   };
 
   const handleFullscreen = () => {
-    if (!isAsteroids) return;
+    if (!isPlayable) return;
     // Se pide fullscreen sobre .crt-screen (no sobre el canvas del juego):
     // ese contenedor incluye tanto el canvas como TouchControls, así los
     // controles táctiles siguen visibles en mobile dentro de la pantalla
@@ -164,7 +167,7 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   };
 
   const handleFin = () => {
-    if (!isAsteroids) return;
+    if (!isPlayable) return;
     if (hud?.phase === "playing") {
       gameRef.current?.togglePause();
       autoPausedRef.current = true;
@@ -200,14 +203,18 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
             <div className="l">Puntuación</div>
             <div className="v">{score}</div>
           </div>
-          <div className="hud-stat lives">
-            <div className="l">Vidas</div>
-            <div className="v">{"♥ ".repeat(lives).trim()}</div>
-          </div>
-          <div className="hud-stat level">
-            <div className="l">Nivel</div>
-            <div className="v">{String(level).padStart(2, "0")}</div>
-          </div>
+          {showLives && (
+            <div className="hud-stat lives">
+              <div className="l">Vidas</div>
+              <div className="v">{"♥ ".repeat(lives).trim()}</div>
+            </div>
+          )}
+          {showLevel && (
+            <div className="hud-stat level">
+              <div className="l">Nivel</div>
+              <div className="v">{String(level).padStart(2, "0")}</div>
+            </div>
+          )}
         </div>
         <div className="hud-actions">
           <button type="button" className="btn yellow" onClick={handlePause}>
@@ -216,7 +223,7 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
           <button type="button" className="btn magenta" onClick={handleFin}>
             FIN
           </button>
-          {isAsteroids && (
+          {isPlayable && (
             <button
               type="button"
               className="btn"
@@ -235,10 +242,10 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
 
       <div className="crt" ref={crtRef}>
         <div className="crt-screen" ref={crtScreenRef}>
-          {isAsteroids ? (
+          {isPlayable && entry ? (
             <>
-              <AsteroidsGame ref={gameRef} onHudChange={setHud} />
-              <TouchControls />
+              <entry.Game ref={gameRef} onHudChange={setHud} />
+              {entry.Touch && <entry.Touch />}
             </>
           ) : (
             <div className="game-arena">
@@ -290,7 +297,7 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
         </div>
       )}
 
-      {isAsteroids && hud?.phase === "gameover" && !scoreDismissed && (
+      {isPlayable && hud?.phase === "gameover" && !scoreDismissed && (
         <div className="modal-bd">
           <div className="modal">
             <h2>GAME OVER</h2>

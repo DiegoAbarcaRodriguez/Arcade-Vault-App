@@ -1171,12 +1171,13 @@ a {
   justify-content: center;
   background: radial-gradient(circle at 50% 50%, #0a0030 0%, #000 70%), #000;
 }
-/* Arena de Asteroides: resolución lógica fija 800x600 (ver AsteroidsGame.tsx),
-   escalada por CSS para llenar .crt-screen (que ya tiene aspect-ratio 4/3). */
-.game-arena.asteroids-arena {
+/* Arena de un juego con motor propio (canvas): resolución lógica fija
+   por juego (ver components/<Juego>Game.tsx), escalada por CSS para
+   llenar .crt-screen (que ya tiene aspect-ratio 4/3). */
+.game-arena.game-arena-canvas {
   background: #000;
 }
-.asteroids-canvas {
+.game-canvas {
   width: 100%;
   height: 100%;
   display: block;
@@ -1186,9 +1187,8 @@ a {
 /* Pantalla completa: se pide sobre .crt-screen (no sobre el canvas), para
    que TouchControls —hermano del canvas dentro de .crt-screen— entre a la
    capa de fullscreen junto con el juego y siga visible en mobile.
-   object-fit: contain en el canvas mantiene su aspect ratio 4:3
-   (resolución lógica 800x600) sin deformarlo — con barras negras si la
-   pantalla no coincide en proporción. */
+   object-fit: contain en el canvas mantiene su aspect ratio 4:3 sin
+   deformarlo — con barras negras si la pantalla no coincide en proporción. */
 .crt-screen:fullscreen,
 .crt-screen:-webkit-full-screen {
   width: 100vw;
@@ -1197,8 +1197,8 @@ a {
   border-radius: 0;
   background: #000;
 }
-.crt-screen:fullscreen .asteroids-canvas,
-.crt-screen:-webkit-full-screen .asteroids-canvas {
+.crt-screen:fullscreen .game-canvas,
+.crt-screen:-webkit-full-screen .game-canvas {
   width: 100vw;
   height: 100vh;
   object-fit: contain;
