@@ -1,0 +1,52 @@
+import type { ComponentType, ForwardRefExoticComponent, RefAttributes } from "react";
+import AsteroidsGame from "@/components/AsteroidsGame";
+import TouchControls from "@/components/TouchControls";
+
+/**
+ * Contrato compartido que todo juego jugable debe cumplir para que
+ * GamePlayer.tsx pueda montarlo sin conocer sus particularidades. Ver
+ * components/AsteroidsGame.tsx para la implementación de referencia.
+ */
+export interface GameHudState {
+  score: number;
+  lives: number;
+  level: number;
+  phase: "playing" | "paused" | "dead" | "gameover";
+  // Métricas propias del juego (ej. tripleShotSeconds, lines) que el
+  // canvas dibuja en su propio HUD interno; el panel externo de
+  // GamePlayer no las muestra.
+  extra?: Record<string, string | number>;
+}
+
+export interface GameHandle {
+  togglePause: () => void;
+  forceGameOver: () => void; // usado por el botón FIN tras confirmar
+}
+
+export interface GameComponentProps {
+  onHudChange?: (state: GameHudState) => void;
+}
+
+export type GameComponent = ForwardRefExoticComponent<
+  GameComponentProps & RefAttributes<GameHandle>
+>;
+
+export interface GameEntry {
+  Game: GameComponent;
+  Touch?: ComponentType; // controles táctiles, opcional
+  showLives?: boolean; // el juego usa vidas (default true)
+  showLevel?: boolean; // el juego usa niveles (default true)
+}
+
+/**
+ * Registro de juegos jugables. GamePlayer.tsx busca game.id acá; si no
+ * hay entrada, muestra la arena decorativa estática de siempre.
+ */
+export const GAME_REGISTRY: Record<string, GameEntry> = {
+  asteroides: {
+    Game: AsteroidsGame,
+    Touch: TouchControls,
+    showLives: true,
+    showLevel: true,
+  },
+};

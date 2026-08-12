@@ -1,27 +1,15 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import type {
+  GameComponentProps,
+  GameHandle,
+  GameHudState,
+} from "@/components/games/registry";
 
 // Resolución lógica fija del juego (ver spec 05, decisión de escalado por CSS).
 const W = 800;
 const H = 600;
-
-export interface AsteroidsHudState {
-  score: number;
-  lives: number;
-  level: number;
-  tripleShotSeconds: number; // 0 si no está activo el power-up
-  phase: "playing" | "paused" | "dead" | "gameover";
-}
-
-export interface AsteroidsGameHandle {
-  togglePause: () => void;
-  forceGameOver: () => void; // usado por el botón FIN tras confirmar
-}
-
-interface AsteroidsGameProps {
-  onHudChange?: (state: AsteroidsHudState) => void;
-}
 
 /**
  * Port de resources/02-asteroids/game.js. Toda la lógica del motor
@@ -29,7 +17,7 @@ interface AsteroidsGameProps {
  * useEffect: cada montaje del componente crea su propio estado
  * aislado, sin globals compartidos entre instancias.
  */
-const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
+const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
   function AsteroidsGame({ onHudChange }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     // Ref para que el loop siempre invoque el callback más reciente sin
@@ -42,7 +30,7 @@ const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
     // Los métodos reales se asignan dentro del useEffect (cierran sobre el
     // estado mutable del motor); este ref los expone hacia afuera sin tener
     // que reiniciar el motor cuando el componente padre se re-renderiza.
-    const controlsRef = useRef<AsteroidsGameHandle>({
+    const controlsRef = useRef<GameHandle>({
       togglePause: () => {},
       forceGameOver: () => {},
     });
@@ -634,22 +622,23 @@ const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
       // ── HUD externo ──────────────────────────────────────────────────────
       // Se reporta hacia afuera solo cuando algún valor relevante cambia,
       // no en cada frame, para no forzar renders de React a 60fps.
-      let lastHud: AsteroidsHudState | null = null;
+      let lastHud: GameHudState | null = null;
       function reportHud() {
-        const next: AsteroidsHudState = {
+        const tripleShotSeconds = Number(ship.tripleShot.toFixed(1));
+        const next: GameHudState = {
           score,
           lives,
           level,
-          tripleShotSeconds: Number(ship.tripleShot.toFixed(1)),
           phase,
+          extra: { tripleShotSeconds },
         };
         if (
           !lastHud ||
           lastHud.score !== next.score ||
           lastHud.lives !== next.lives ||
           lastHud.level !== next.level ||
-          lastHud.tripleShotSeconds !== next.tripleShotSeconds ||
-          lastHud.phase !== next.phase
+          lastHud.phase !== next.phase ||
+          lastHud.extra?.tripleShotSeconds !== tripleShotSeconds
         ) {
           lastHud = next;
           onHudChangeRef.current?.(next);
@@ -707,13 +696,8 @@ const AsteroidsGame = forwardRef<AsteroidsGameHandle, AsteroidsGameProps>(
     }, []);
 
     return (
-      <div className="game-arena asteroids-arena">
-        <canvas
-          ref={canvasRef}
-          width={W}
-          height={H}
-          className="asteroids-canvas"
-        />
+      <div className="game-arena game-arena-canvas">
+        <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
       </div>
     );
   },
