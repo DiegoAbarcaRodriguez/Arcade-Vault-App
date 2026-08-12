@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { GAMES, seededScores } from "@/lib/data";
+import { getGame, getScores } from "@/lib/supabase/queries";
 
 export default async function GameDetail({
   params,
@@ -8,10 +8,10 @@ export default async function GameDetail({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const game = GAMES.find((g) => g.id === id);
+  const game = await getGame(id);
   if (!game) notFound();
 
-  const scores = seededScores(id.length * 17 + 3, 10);
+  const scores = await getScores(id, 10);
 
   return (
     <div className="av-detail fade-in">
@@ -37,7 +37,10 @@ export default async function GameDetail({
               <div className="l">Mejor global</div>
               <div
                 className="v"
-                style={{ color: "var(--magenta)", textShadow: "0 0 6px rgba(255,0,110,0.5)" }}
+                style={{
+                  color: "var(--magenta)",
+                  textShadow: "0 0 6px rgba(255,0,110,0.5)",
+                }}
               >
                 {game.best.toLocaleString("es-ES")}
               </div>
@@ -46,7 +49,10 @@ export default async function GameDetail({
               <div className="l">Dificultad</div>
               <div
                 className="v"
-                style={{ color: "var(--yellow)", textShadow: "0 0 6px rgba(245,255,0,0.5)" }}
+                style={{
+                  color: "var(--yellow)",
+                  textShadow: "0 0 6px rgba(245,255,0,0.5)",
+                }}
               >
                 ★ ★ ★ ☆ ☆
               </div>
@@ -66,21 +72,50 @@ export default async function GameDetail({
       <aside>
         <div className="leaderboard">
           <h3>MEJORES PUNTUACIONES</h3>
-          {scores.map((r, i) => (
-            <div
-              key={r.name}
-              className={"lb-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")}
+          {scores.length === 0 ? (
+            <p
+              style={{
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+                color: "var(--ink-faint)",
+                textAlign: "center",
+                padding: "24px 8px",
+              }}
             >
-              <div className="rk">#{String(r.rank).padStart(2, "0")}</div>
-              <div className="pl">
-                {r.name}
-                <div style={{ fontSize: 10, color: "var(--ink-faint)", letterSpacing: "0.1em" }}>
-                  {r.date}
+              Sé el primero en registrar un puntaje.
+            </p>
+          ) : (
+            scores.map((r, i) => (
+              <div
+                key={r.name + i}
+                className={
+                  "lb-row" +
+                  (i === 0
+                    ? " top1"
+                    : i === 1
+                      ? " top2"
+                      : i === 2
+                        ? " top3"
+                        : "")
+                }
+              >
+                <div className="rk">#{String(r.rank).padStart(2, "0")}</div>
+                <div className="pl">
+                  {r.name}
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "var(--ink-faint)",
+                      letterSpacing: "0.1em",
+                    }}
+                  >
+                    {r.date}
+                  </div>
                 </div>
+                <div className="sc">{r.score.toLocaleString("es-ES")}</div>
               </div>
-              <div className="sc">{r.score.toLocaleString("es-ES")}</div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </aside>
     </div>

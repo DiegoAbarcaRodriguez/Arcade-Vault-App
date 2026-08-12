@@ -1,7 +1,13 @@
 import Link from "next/link";
 import Reveal from "@/components/Reveal";
-import { GAMES } from "@/lib/data";
-import { FEATURES, STATS, ACTIVITY_TICKER, TOP_PLAYERS_TODAY, PRICING_FAQ } from "./data";
+import { listGames } from "@/lib/supabase/queries";
+import {
+  FEATURES,
+  STATS,
+  ACTIVITY_TICKER,
+  TOP_PLAYERS_TODAY,
+  PRICING_FAQ,
+} from "./data";
 
 function FloatingSilhouettes() {
   return (
@@ -47,7 +53,15 @@ function FloatingSilhouettes() {
         <g fill="#00ff88">
           <rect x="10" y="0" width="4" height="24" />
           <rect x="0" y="10" width="24" height="4" />
-          <rect x="6" y="6" width="12" height="12" fill="none" stroke="#00ff88" strokeWidth="2" />
+          <rect
+            x="6"
+            y="6"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="#00ff88"
+            strokeWidth="2"
+          />
         </g>
       </svg>
       <svg className="silo s5" viewBox="0 0 36 24">
@@ -100,7 +114,11 @@ function FloatingSilhouettes() {
   );
 }
 
-function FeatureIcon({ kind }: { kind: "GAMEPAD" | "FREE" | "TROPHY" | "ROCKET" }) {
+function FeatureIcon({
+  kind,
+}: {
+  kind: "GAMEPAD" | "FREE" | "TROPHY" | "ROCKET";
+}) {
   const C = "currentColor";
   if (kind === "GAMEPAD")
     return (
@@ -120,7 +138,15 @@ function FeatureIcon({ kind }: { kind: "GAMEPAD" | "FREE" | "TROPHY" | "ROCKET" 
     return (
       <svg className="ft-icon" viewBox="0 0 16 16">
         <g fill={C}>
-          <rect x="3" y="3" width="10" height="10" fill="none" stroke={C} strokeWidth="1.5" />
+          <rect
+            x="3"
+            y="3"
+            width="10"
+            height="10"
+            fill="none"
+            stroke={C}
+            strokeWidth="1.5"
+          />
           <rect x="5" y="6" width="1.5" height="4" />
           <rect x="5" y="6" width="4" height="1.5" />
           <rect x="5" y="8" width="3" height="1" />
@@ -159,8 +185,9 @@ function FeatureIcon({ kind }: { kind: "GAMEPAD" | "FREE" | "TROPHY" | "ROCKET" 
   );
 }
 
-export default function Home() {
-  const previewGames = GAMES.slice(0, 6);
+export default async function Home() {
+  const games = await listGames();
+  const previewGames = games.slice(0, 6);
 
   return (
     <div className="home fade-in">
@@ -249,7 +276,11 @@ export default function Home() {
       <Reveal className="home-stats">
         <div className="stats-inner">
           {STATS.map((st, i) => (
-            <div key={st.u} className="stat-block" style={{ transitionDelay: i * 90 + "ms" }}>
+            <div
+              key={st.u}
+              className="stat-block"
+              style={{ transitionDelay: i * 90 + "ms" }}
+            >
               <div className="stat-n neon-yellow">{st.n}</div>
               <div className="stat-u pixel">{st.u}</div>
               <div className="stat-s">{st.s}</div>
@@ -272,10 +303,16 @@ export default function Home() {
             </div>
             <div className="ticker">
               {ACTIVITY_TICKER.map((r, i) => (
-                <div key={r.player + i} className="tick-row" style={{ animationDelay: i * 60 + "ms" }}>
+                <div
+                  key={r.player + i}
+                  className="tick-row"
+                  style={{ animationDelay: i * 60 + "ms" }}
+                >
                   <span className={"tk-p neon-" + r.color}>{r.player}</span>
                   <span className="tk-mid">▸ {r.game}</span>
-                  <span className="tk-s">+{r.score.toLocaleString("es-ES")}</span>
+                  <span className="tk-s">
+                    +{r.score.toLocaleString("es-ES")}
+                  </span>
                   <span className="tk-t">{r.time}</span>
                 </div>
               ))}
@@ -284,7 +321,9 @@ export default function Home() {
 
           <div className="activity-card">
             <div className="ac-head">
-              <div className="ac-title pixel neon-magenta">▸ TOP JUGADORES · HOY</div>
+              <div className="ac-title pixel neon-magenta">
+                ▸ TOP JUGADORES · HOY
+              </div>
               <Link href="/salon" className="lb-link">
                 VER SALÓN →
               </Link>
@@ -293,14 +332,30 @@ export default function Home() {
               {TOP_PLAYERS_TODAY.map((r, i) => (
                 <div
                   key={r.player}
-                  className={"top-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")}
+                  className={
+                    "top-row" +
+                    (i === 0
+                      ? " top1"
+                      : i === 1
+                        ? " top2"
+                        : i === 2
+                          ? " top3"
+                          : "")
+                  }
                 >
-                  <span className="tp-rk">#{String(r.rank).padStart(2, "0")}</span>
+                  <span className="tp-rk">
+                    #{String(r.rank).padStart(2, "0")}
+                  </span>
                   <span className="tp-bar">
-                    <span className="tp-fill" style={{ width: 100 - i * 16 + "%" }}></span>
+                    <span
+                      className="tp-fill"
+                      style={{ width: 100 - i * 16 + "%" }}
+                    ></span>
                   </span>
                   <span className="tp-p">{r.player}</span>
-                  <span className="tp-s">{r.score.toLocaleString("es-ES")}</span>
+                  <span className="tp-s">
+                    {r.score.toLocaleString("es-ES")}
+                  </span>
                 </div>
               ))}
             </div>
@@ -332,7 +387,11 @@ export default function Home() {
               <li>✔ Nuevos juegos cada mes</li>
               <li>✔ Funciona en cualquier navegador</li>
             </ul>
-            <Link href="/auth" className="btn xl pulse" style={{ width: "100%" }}>
+            <Link
+              href="/auth"
+              className="btn xl pulse"
+              style={{ width: "100%" }}
+            >
               EMPEZAR GRATIS →
             </Link>
             <div className="pc-foot">No pedimos tarjeta. Nunca lo haremos.</div>
@@ -360,7 +419,9 @@ export default function Home() {
         <Link href="/biblioteca" className="btn xl pulse final-cta">
           INSERTAR MONEDA →
         </Link>
-        <div className="final-tag">Gratis. Sin registro obligatorio. Empieza en segundos.</div>
+        <div className="final-tag">
+          Gratis. Sin registro obligatorio. Empieza en segundos.
+        </div>
       </Reveal>
     </div>
   );
