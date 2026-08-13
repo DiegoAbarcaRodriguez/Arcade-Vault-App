@@ -1205,6 +1205,34 @@ a {
   background: #000;
 }
 
+/* Arena de Tetris: dos canvas (tablero + panel HUD/siguiente pieza) en vez
+   de uno solo. El tablero (.game-canvas) queda centrado en .crt-screen; el
+   panel (.tetris-panel-canvas) se ancla al borde derecho. Ambos son
+   elementos reemplazados de tamaño fijo (300×600 y 200×600): con height
+   explícito y width:auto el navegador respeta su aspect ratio nativo. */
+.tetris-arena {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.tetris-arena .game-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  height: 90%;
+  transform: translate(-50%, -50%);
+}
+.tetris-panel-canvas {
+  position: absolute;
+  right: 4%;
+  top: 50%;
+  width: auto;
+  height: 70%;
+  display: block;
+  transform: translateY(-50%);
+}
+
 /* Controles táctiles de Asteroids: overlay sobre el canvas, sin
    consumir espacio de layout adicional. Mismo breakpoint que usa el
    nav para pasar a menú hamburguesa (ver @media 840px más arriba). */
