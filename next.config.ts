@@ -14,7 +14,11 @@ const nextConfig: NextConfig = {
       allowedOrigins:
         process.env.NODE_ENV === "production"
           ? undefined
-          : ["localhost:3000", "127.0.0.1:3000"],
+          : [
+              "localhost:3000",
+              "127.0.0.1:3000",
+              "zkcsrvf4-3000.usw3.devtunnels.ms",
+            ],
     },
   },
 };

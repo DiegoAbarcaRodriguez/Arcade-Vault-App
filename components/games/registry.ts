@@ -7,6 +7,7 @@ import AsteroidsGame from "@/components/AsteroidsGame";
 import TouchControls from "@/components/TouchControls";
 import TetrisGame from "@/components/TetrisGame";
 import TetrisTouchControls from "@/components/TetrisTouchControls";
+import BloqueBusterGame from "@/components/BloqueBusterGame";
 
 /**
  * Contrato compartido que todo juego jugable debe cumplir para que
@@ -59,6 +60,11 @@ export const GAME_REGISTRY: Record<string, GameEntry> = {
     Game: TetrisGame,
     Touch: TetrisTouchControls,
     showLives: false,
+    showLevel: true,
+  },
+  "bloque-buster": {
+    Game: BloqueBusterGame,
+    showLives: true,
     showLevel: true,
   },
 };
