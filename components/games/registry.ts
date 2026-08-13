@@ -1,6 +1,12 @@
-import type { ComponentType, ForwardRefExoticComponent, RefAttributes } from "react";
+import type {
+  ComponentType,
+  ForwardRefExoticComponent,
+  RefAttributes,
+} from "react";
 import AsteroidsGame from "@/components/AsteroidsGame";
 import TouchControls from "@/components/TouchControls";
+import TetrisGame from "@/components/TetrisGame";
+import TetrisTouchControls from "@/components/TetrisTouchControls";
 
 /**
  * Contrato compartido que todo juego jugable debe cumplir para que
@@ -47,6 +53,12 @@ export const GAME_REGISTRY: Record<string, GameEntry> = {
     Game: AsteroidsGame,
     Touch: TouchControls,
     showLives: true,
+    showLevel: true,
+  },
+  tetris: {
+    Game: TetrisGame,
+    Touch: TetrisTouchControls,
+    showLives: false,
     showLevel: true,
   },
 };
