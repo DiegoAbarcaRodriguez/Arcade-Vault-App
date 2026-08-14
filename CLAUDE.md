@@ -22,6 +22,12 @@ Project-local skills live in both `.agents/skills/` and `.claude/skills/` (dupli
 - **`spec-impl`** — implements an approved spec (see Spec-driven workflow below).
 - **`add-game`** — designs the spec for a new playable game, either ported from `resources/` or from a from-scratch description (see Adding a new playable game below).
 
+## Agentes
+
+Project-local subagents live in `.claude/agents/`:
+
+- **`game-planner`** — decides _which_ game should be added next (as opposed to `/add-game`, which decides _how_). Analyzes the current catalog (`components/games/registry.ts`, `lib/archived-games.ts`, the `games` table) and returns an argued recommendation plus discarded alternatives; never writes specs or code. Keeps a running memory of every suggestion (proposed/implemented/discarded) in `resources/game-suggestions-todo.md` so it never re-proposes something already evaluated. Flow: `game-planner` (proposes) → `/add-game` (designs the spec for the chosen game) → human review `Draft`→`Approved` → `/spec-impl` (implements).
+
 ## Herramientas MCP
 
 Todos los screenshots generados por el MCP de Playwright deben ser almacenados en `.playwright-screenshots/`.
