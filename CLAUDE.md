@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## About this project
 
-Arcade Vault (`arcade-vault`) is a Next.js 16 app for playing games online and competing on point leaderboards. It is currently a fresh `create-next-app` scaffold — no game features, routes, or data layer have been built yet.
+Arcade Vault (`arcade-vault`) is a Next.js 16 app for playing games online and competing on point leaderboards. It has moved past the scaffold stage: it now has real routes, a Supabase-backed data layer, a multi-game contract, and several playable games (see below).
 
 ## Critical: Next.js version
 
@@ -15,7 +15,12 @@ This project uses **Next.js 16.2.11**, which has breaking changes vs. older Next
 
 ## Skills
 
-Usa siempre /frontend-design para disenar la interfaz de usuario.
+Project-local skills live in both `.agents/skills/` and `.claude/skills/` (duplicated between the two):
+
+- **`frontend-design`** — usa siempre /frontend-design para disenar la interfaz de usuario.
+- **`spec`** — interactive spec design (see Spec-driven workflow below).
+- **`spec-impl`** — implements an approved spec (see Spec-driven workflow below).
+- **`add-game`** — designs the spec for a new playable game, either ported from `resources/` or from a from-scratch description (see Adding a new playable game below).
 
 ## Herramientas MCP
 
@@ -23,10 +28,17 @@ Todos los screenshots generados por el MCP de Playwright deben ser almacenados e
 
 ## Architecture
 
-- App Router (`app/`) with TypeScript, React 19.
+- App Router (`app/`) with TypeScript, React 19. Route groups/pages implemented so far: `app/(home)/`, `app/acerca-de/` (about/contact), `app/auth/`, `app/biblioteca/` (game library), `app/juego/[id]/` (game detail + leaderboard), `app/jugar/[id]/` (the playable game screen), `app/salon/` (hall of fame / global leaderboard).
 - Styling: Tailwind CSS v4 via `@tailwindcss/postcss` (no `tailwind.config.*` — v4 is configured through `app/globals.css` / PostCSS).
 - Path alias `@/*` maps to the project root (`tsconfig.json`).
 - Fonts loaded via `next/font/google` (Geist Sans/Mono) in `app/layout.tsx`.
+- Data layer: `lib/data.ts` and `lib/archived-games.ts` hold static/local game metadata; `lib/supabase/` (`client.ts`, `server.ts`, `queries.ts`, `actions.ts`) holds the Supabase-backed reads (`listGames`, `getGame`, `getScores`) and the `submitScore` server action. Both sources currently coexist during the migration described in `specs/06-leaderboard-y-juegos.md`.
+- Games/HUD contract: `components/games/registry.ts` (`GameHudState`, `GameHandle`, `GAME_REGISTRY`) lets `components/GamePlayer.tsx` mount any registered game generically (HUD sync, PAUSA/FIN, fullscreen, and the Supabase score-saving flow are all game-agnostic) — see "Adding a new playable game" below.
+
+### External services
+
+- **Supabase** — primary data backend. `games` and `scores` tables (see `lib/supabase/queries.ts` for the exact shape); `lib/supabase/client.ts` is the browser client, `lib/supabase/server.ts` the server client, both configured from `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (see `.env.example`). A Supabase MCP server is also available for schema/migration/query work directly from Claude Code. Setup documented in `specs/04-supabase-setup.md`.
+- **Resend** — transactional email for the contact form (`app/acerca-de/actions.ts`, `sendContactMessage`), configured via `RESEND_API_KEY` (see `.env.example`). Sends from `onboarding@resend.dev` to the site owner's address, using the submitter's email as `replyTo`.
 
 ## Spec-driven workflow
 
@@ -36,10 +48,17 @@ This project follows spec-driven design via the `/spec` and `/spec-impl` skills 
 2. A human reviews the spec and manually flips its state to `Approved`.
 3. **`/spec-impl <NN-slug>`** — refuses to run unless the spec's state means "Approved". If approved, creates/switches to branch `spec-NN-slug` (controlled by `AutoCreateBranch` in `specs/.spec-config.yml`, default `true`), then implements the plan one step at a time, pausing for review after each step.
 
-The `specs/` directory does not exist yet — it will be created the first time `/spec` saves a spec. When picking up work in this repo, check `specs/` for existing specs and their state before starting new feature work.
+`specs/` currently holds, in order: `01-vistas-mvp`, `02-home-page`, `03-about-contact`, `04-supabase-setup`, `05-asteroids-jugable`, `06-leaderboard-y-juegos`, `07-tetris-jugable`, `08-bloque-buster-jugable`, `09-serpentina-jugable`. When picking up work in this repo, check `specs/` for existing specs and their state before starting new feature work.
 
 ### Adding a new playable game
 
 Games are wired through a shared multi-game contract: `components/games/registry.ts` (`GameHudState`, `GameHandle`, `GAME_REGISTRY`) lets `components/GamePlayer.tsx` mount any registered game generically (HUD sync, PAUSA/FIN, fullscreen, and the Supabase score-saving flow are all game-agnostic). Adding a game means implementing `components/<Game>Game.tsx` against that contract, adding its row to the `games` table in Supabase, and registering it in `GAME_REGISTRY`.
+
+Games implemented so far (registered in `GAME_REGISTRY`):
+
+- **`asteroides`** — `components/AsteroidsGame.tsx` + `components/TouchControls.tsx`. Lives + level HUD.
+- **`tetris`** — `components/TetrisGame.tsx` + `components/TetrisTouchControls.tsx`. No lives, has level HUD.
+- **`bloque-buster`** — `components/BloqueBusterGame.tsx`. No touch controls yet. Lives + level HUD.
+- **`serpentina`** — `components/SerpentinaGame.tsx` + `components/SerpentinaTouchControls.tsx`. Lives + level HUD.
 
 **`/add-game <resources/ folder | game description>`** — a project skill (`.agents/skills/add-game/SKILL.md`, duplicated in `.claude/skills/add-game/`) that designs the spec for a new game: it ports an existing prototype from `resources/` (e.g. `03-tetris`, `04-arkanoid`) or takes a from-scratch description, asks the adaptation questions the contract requires (aspect ratio, HUD mapping, controls, assets, `games` row metadata), and saves `specs/NN-slug.md` in `Draft` state — same house style as `/spec`. It never writes code; run `/spec-impl NN-slug` afterward to implement it. See `.agents/skills/add-game/reference.md` for the exact contracts and file patterns it relies on.
