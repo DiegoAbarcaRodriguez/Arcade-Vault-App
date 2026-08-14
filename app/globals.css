@@ -1287,6 +1287,28 @@ a {
   .touch-btn.fire:active {
     background: rgba(255, 0, 110, 0.25);
   }
+  /* D-pad de Serpentina: 4 botones (↑↓←→) en cruz, sobre la misma base
+     .touch-group/.touch-btn — grid en vez del flex row por defecto. */
+  .touch-group.dpad {
+    display: grid;
+    grid-template-areas:
+      ".    up    ."
+      "left  .    right"
+      ".    down  .";
+    gap: 6px;
+  }
+  .dpad-up {
+    grid-area: up;
+  }
+  .dpad-left {
+    grid-area: left;
+  }
+  .dpad-right {
+    grid-area: right;
+  }
+  .dpad-down {
+    grid-area: down;
+  }
 }
 .game-arena .grid-floor {
   position: absolute;
