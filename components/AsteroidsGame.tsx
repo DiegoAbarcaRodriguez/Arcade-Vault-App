@@ -1,15 +1,101 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type {
   GameComponentProps,
   GameHandle,
   GameHudState,
 } from "@/components/games/registry";
+import { loadSkin, saveSkin, type Skin } from "@/lib/games/skins";
+import SkinSelector from "@/components/games/SkinSelector";
 
 // Resolución lógica fija del juego (ver spec 05, decisión de escalado por CSS).
 const W = 800;
 const H = 600;
+
+/**
+ * Roles de color que necesita el motor de Asteroids: nave, disparo,
+ * asteroide, power-up, partículas de explosión, HUD y overlays de
+ * pausa/game-over. Cada skin es un objeto con esta misma forma.
+ */
+interface AsteroidsPalette {
+  background: string; // fondo del canvas (fillRect de cada frame)
+  ship: string; // trazo de la nave y del ícono de "vida" del HUD
+  shipThrust: string; // llama del propulsor
+  bullet: string; // disparos
+  asteroid: string; // trazo de los asteroides
+  particle: string; // partículas de explosión (alpha aplicado en draw())
+  powerup: string; // power-up de disparo triple (ícono + etiqueta "3x")
+  hudText: string; // texto principal del HUD (score/nivel)
+  hudAccent: string; // indicador "3x Ns" del HUD
+  overlayTitle: string; // título "GAME OVER"/"PAUSADO"
+  overlaySub: string; // subtítulo del overlay (alpha aplicado en draw())
+  glowBlur: number; // shadowBlur (px) aplicado a los trazos principales
+}
+
+// `clasico` es el look original del juego (spec 05): los mismos literales
+// que ya estaban hardcodeados en ctx.fillStyle/strokeStyle antes de este
+// cambio, solo movidos a esta estructura — no es un rediseño.
+const SKINS: Record<Skin, AsteroidsPalette> = {
+  clasico: {
+    background: "#000000",
+    ship: "#ffffff",
+    shipThrust: "#ff8200",
+    bullet: "#ffffff",
+    asteroid: "#ffffff",
+    particle: "#ffffff",
+    powerup: "#00ffff",
+    hudText: "#ffffff",
+    hudAccent: "#00ffff",
+    overlayTitle: "#ffffff",
+    overlaySub: "#ffffff",
+    glowBlur: 0,
+  },
+  // Fósforo verde/ámbar de monitor CRT de 8-bit: paleta reducida a dos
+  // tonos con glow (shadowBlur/shadowColor en draw()) para que el verde
+  // no quede plano contra el fondo negro del canvas.
+  retro: {
+    background: "#000000",
+    ship: "#33ff33",
+    shipThrust: "#ffb000",
+    bullet: "#33ff33",
+    asteroid: "#33ff33",
+    particle: "#33ff33",
+    powerup: "#ffb000",
+    hudText: "#33ff33",
+    hudAccent: "#ffb000",
+    overlayTitle: "#33ff33",
+    overlaySub: "#33ff33",
+    glowBlur: 8,
+  },
+  // Synthwave/arcade neón: reusa los mismos hex que app/globals.css usa
+  // para --cyan/--magenta/--yellow/--green.
+  neon: {
+    background: "#000000",
+    ship: "#00f5ff",
+    shipThrust: "#ff006e",
+    bullet: "#f5ff00",
+    asteroid: "#ff006e",
+    particle: "#00f5ff",
+    powerup: "#00ff88",
+    hudText: "#00f5ff",
+    hudAccent: "#00ff88",
+    overlayTitle: "#ff006e",
+    overlaySub: "#00f5ff",
+    glowBlur: 6,
+  },
+};
+
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
 
 /**
  * Port de resources/02-asteroids/game.js. Toda la lógica del motor
@@ -37,7 +123,25 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      setSkin: handleSkinChange,
     }));
+
+    // Skin activa: estado de React (para el <select>, y para persistirla)
+    // más un ref (para que el loop del motor, que corre dentro de un
+    // useEffect con deps vacías, siempre lea la paleta más reciente sin
+    // que cambiar de skin reinicie la partida en curso).
+    const [skin, setSkin] = useState<Skin>(() => loadSkin("asteroides"));
+    const paletteRef = useRef<AsteroidsPalette>(SKINS[skin]);
+    const skinRef = useRef<Skin>(skin);
+    useEffect(() => {
+      paletteRef.current = SKINS[skin];
+      skinRef.current = skin;
+    }, [skin]);
+
+    const handleSkinChange = (next: Skin) => {
+      setSkin(next);
+      saveSkin("asteroides", next);
+    };
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -131,7 +235,7 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
         }
 
         draw() {
-          ctx!.fillStyle = "#fff";
+          ctx!.fillStyle = paletteRef.current.bullet;
           ctx!.beginPath();
           ctx!.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
           ctx!.fill();
@@ -192,12 +296,15 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
         }
 
         draw() {
+          const palette = paletteRef.current;
           ctx!.save();
           ctx!.translate(this.x, this.y);
           ctx!.rotate(this.rot);
-          ctx!.strokeStyle = "#fff";
+          ctx!.strokeStyle = palette.asteroid;
           ctx!.lineWidth = 1.5;
           ctx!.lineJoin = "round";
+          ctx!.shadowBlur = palette.glowBlur;
+          ctx!.shadowColor = palette.asteroid;
           ctx!.beginPath();
           ctx!.moveTo(this.verts[0][0], this.verts[0][1]);
           for (let i = 1; i < this.verts.length; i++)
@@ -240,12 +347,12 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
           ctx!.save();
           ctx!.translate(this.x, this.y);
           ctx!.rotate(Math.PI / 4);
-          ctx!.strokeStyle = "#0ff";
+          ctx!.strokeStyle = paletteRef.current.powerup;
           ctx!.lineWidth = 2;
           const r = this.radius * pulse;
           ctx!.strokeRect(-r, -r, r * 2, r * 2);
           ctx!.restore();
-          ctx!.fillStyle = "#0ff";
+          ctx!.fillStyle = paletteRef.current.powerup;
           ctx!.font = "bold 12px monospace";
           ctx!.textAlign = "center";
           ctx!.textBaseline = "middle";
@@ -330,12 +437,15 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
           if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0)
             return;
 
+          const palette = paletteRef.current;
           ctx!.save();
           ctx!.translate(this.x, this.y);
           ctx!.rotate(this.angle);
-          ctx!.strokeStyle = "#fff";
+          ctx!.strokeStyle = palette.ship;
           ctx!.lineWidth = 1.5;
           ctx!.lineJoin = "round";
+          ctx!.shadowBlur = palette.glowBlur;
+          ctx!.shadowColor = palette.ship;
 
           // Silueta clásica: triángulo con muesca trasera
           ctx!.beginPath();
@@ -352,7 +462,8 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
             ctx!.moveTo(-8, -4);
             ctx!.lineTo(-8 - rand(6, 14), 0);
             ctx!.lineTo(-8, 4);
-            ctx!.strokeStyle = "rgba(255, 130, 0, 0.85)";
+            ctx!.strokeStyle = `rgba(${hexToRgb(palette.shipThrust)}, 0.85)`;
+            ctx!.shadowColor = palette.shipThrust;
             ctx!.stroke();
           }
 
@@ -390,7 +501,8 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
 
         draw() {
           const alpha = this.ttl / this.life;
-          ctx!.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+          const palette = paletteRef.current;
+          ctx!.strokeStyle = `rgba(${hexToRgb(palette.particle)},${alpha.toFixed(2)})`;
           ctx!.lineWidth = 1;
           ctx!.beginPath();
           ctx!.moveTo(this.x, this.y);
@@ -552,10 +664,11 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
 
       // ── Draw ─────────────────────────────────────────────────────────────
       function drawLifeIcon(x: number, y: number) {
+        const palette = paletteRef.current;
         ctx!.save();
         ctx!.translate(x, y);
         ctx!.rotate(-Math.PI / 2);
-        ctx!.strokeStyle = "#fff";
+        ctx!.strokeStyle = palette.ship;
         ctx!.lineWidth = 1.2;
         ctx!.lineJoin = "round";
         ctx!.beginPath();
@@ -569,7 +682,9 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function drawHUD() {
-        ctx!.fillStyle = "#fff";
+        const palette = paletteRef.current;
+        ctx!.shadowBlur = 0;
+        ctx!.fillStyle = palette.hudText;
         ctx!.font = "15px monospace";
 
         ctx!.textAlign = "left";
@@ -582,23 +697,25 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
 
         if (ship.tripleShot > 0) {
           ctx!.textAlign = "left";
-          ctx!.fillStyle = "#0ff";
+          ctx!.fillStyle = palette.hudAccent;
           ctx!.fillText(`3x  ${ship.tripleShot.toFixed(1)}s`, 14, 46);
         }
       }
 
       function drawOverlay(title: string, sub: string) {
+        const palette = paletteRef.current;
         ctx!.textAlign = "center";
-        ctx!.fillStyle = "#fff";
+        ctx!.fillStyle = palette.overlayTitle;
         ctx!.font = "bold 46px monospace";
         ctx!.fillText(title, W / 2, H / 2 - 18);
         ctx!.font = "18px monospace";
-        ctx!.fillStyle = "rgba(255,255,255,0.65)";
+        ctx!.fillStyle = `rgba(${hexToRgb(palette.overlaySub)},0.65)`;
         ctx!.fillText(sub, W / 2, H / 2 + 22);
       }
 
       function draw() {
-        ctx!.fillStyle = "#000";
+        ctx!.shadowBlur = 0;
+        ctx!.fillStyle = paletteRef.current.background;
         ctx!.fillRect(0, 0, W, H);
 
         particles.forEach((p) => p.draw());
@@ -631,6 +748,7 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
           level,
           phase,
           extra: { tripleShotSeconds },
+          skin: skinRef.current,
         };
         if (
           !lastHud ||
@@ -638,6 +756,7 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
           lastHud.lives !== next.lives ||
           lastHud.level !== next.level ||
           lastHud.phase !== next.phase ||
+          lastHud.skin !== next.skin ||
           lastHud.extra?.tripleShotSeconds !== tripleShotSeconds
         ) {
           lastHud = next;
@@ -698,6 +817,9 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
     return (
       <div className="game-arena game-arena-canvas">
         <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
+        <div className="game-skin-panel">
+          <SkinSelector value={skin} onChange={handleSkinChange} />
+        </div>
       </div>
     );
   },

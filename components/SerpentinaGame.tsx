@@ -1,11 +1,19 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type {
   GameComponentProps,
   GameHandle,
   GameHudState,
 } from "@/components/games/registry";
+import { loadSkin, saveSkin, type Skin } from "@/lib/games/skins";
+import SkinSelector from "@/components/games/SkinSelector";
 
 // Resolución lógica fija del tablero (canvas único 4:3 nativo, sin
 // letterboxing ni segundo canvas — a diferencia de Tetris).
@@ -87,6 +95,73 @@ const TICK_STEP_MS = 15;
 const MIN_TICK_MS = 60;
 
 /**
+ * Roles de color que necesita el motor de Serpentina: fondo del canvas,
+ * cabeza/cuerpo de la serpiente (con su glow), ojos, texto de HUD, vidas
+ * (corazones) y overlay de pausa/game-over. El atlas de frutas
+ * (`/games/serpentina/fruits.png`) son sprites ya coloreados — no forman
+ * parte de la paleta, se dibujan igual en los tres skins.
+ */
+interface SerpentinaPalette {
+  background: string; // fondo del canvas (fillRect de cada frame)
+  snakeGlow: string; // shadowColor detrás de la serpiente
+  snakeGlowBlur: number; // shadowBlur (px)
+  snakeHead: string; // segmento de la cabeza
+  snakeBody: string; // resto de segmentos
+  snakeEye: string; // pupilas en la cabeza
+  hudText: string; // "Score"/"Nivel"
+  hudLives: string; // corazones de vidas
+  overlayBg: string; // rgba() de fondo de "PAUSADO"/"GAME OVER"
+  overlayText: string; // texto del overlay
+}
+
+// `clasico` es el look original del juego (spec 09): los mismos literales
+// que ya estaban hardcodeados en ctx.fillStyle/shadowColor antes de este
+// cambio, solo movidos a esta estructura — no es un rediseño.
+const SKINS: Record<Skin, SerpentinaPalette> = {
+  clasico: {
+    background: "#000000",
+    snakeGlow: "#00ff88",
+    snakeGlowBlur: 10,
+    snakeHead: "#8dffc4",
+    snakeBody: "#00ff88",
+    snakeEye: "#04140b",
+    hudText: "#ffffff",
+    hudLives: "#ff2d55",
+    overlayBg: "rgba(0, 0, 0, 0.6)",
+    overlayText: "#ffffff",
+  },
+  // Fósforo verde de monitor CRT de 8-bit: paleta reducida a un tono verde
+  // con acento ámbar en las vidas, y más glow (shadowBlur) que `clasico`
+  // para que el verde no quede plano contra el negro del canvas.
+  retro: {
+    background: "#000000",
+    snakeGlow: "#33ff33",
+    snakeGlowBlur: 14,
+    snakeHead: "#b6ffb6",
+    snakeBody: "#33ff33",
+    snakeEye: "#063406",
+    hudText: "#33ff33",
+    hudLives: "#ffb000",
+    overlayBg: "rgba(0, 0, 0, 0.72)",
+    overlayText: "#33ff33",
+  },
+  // Synthwave/arcade neón: reusa los mismos hex que app/globals.css usa
+  // para --cyan/--magenta/--yellow.
+  neon: {
+    background: "#000000",
+    snakeGlow: "#ff006e",
+    snakeGlowBlur: 10,
+    snakeHead: "#00f5ff",
+    snakeBody: "#ff006e",
+    snakeEye: "#0a0a0f",
+    hudText: "#00f5ff",
+    hudLives: "#f5ff00",
+    overlayBg: "rgba(10, 0, 20, 0.68)",
+    overlayText: "#00f5ff",
+  },
+};
+
+/**
  * Snake escrito desde cero (no hay prototipo en resources/, solo assets
  * visuales en resources/snake-assets/). Sigue el mismo boilerplate que
  * AsteroidsGame/BloqueBusterGame: forwardRef<GameHandle, GameComponentProps>,
@@ -107,7 +182,25 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      setSkin: handleSkinChange,
     }));
+
+    // Skin activa: estado de React (para el <select>, y para persistirla)
+    // más un ref (para que el loop, que corre dentro de un useEffect con
+    // deps vacías, siempre lea la paleta más reciente sin que cambiar de
+    // skin reinicie la partida en curso).
+    const [skin, setSkin] = useState<Skin>(() => loadSkin("serpentina"));
+    const paletteRef = useRef<SerpentinaPalette>(SKINS[skin]);
+    const skinRef = useRef<Skin>(skin);
+    useEffect(() => {
+      paletteRef.current = SKINS[skin];
+      skinRef.current = skin;
+    }, [skin]);
+
+    const handleSkinChange = (next: Skin) => {
+      setSkin(next);
+      saveSkin("serpentina", next);
+    };
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -257,9 +350,10 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
 
       // ── Draw ──────────────────────────────────────────────────────────────
       function drawOverlay(message: string) {
-        ctx!.fillStyle = "rgba(0, 0, 0, 0.6)";
+        const palette = paletteRef.current;
+        ctx!.fillStyle = palette.overlayBg;
         ctx!.fillRect(0, 0, W, H);
-        ctx!.fillStyle = "#fff";
+        ctx!.fillStyle = palette.overlayText;
         ctx!.font = "bold 48px monospace";
         ctx!.textAlign = "center";
         ctx!.textBaseline = "middle";
@@ -283,12 +377,13 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function drawSnake() {
-        ctx!.shadowBlur = 10;
-        ctx!.shadowColor = "#00ff88";
+        const palette = paletteRef.current;
+        ctx!.shadowBlur = palette.snakeGlowBlur;
+        ctx!.shadowColor = palette.snakeGlow;
         for (let i = snake.length - 1; i >= 0; i--) {
           const seg = snake[i];
           const isHead = i === 0;
-          ctx!.fillStyle = isHead ? "#8dffc4" : "#00ff88";
+          ctx!.fillStyle = isHead ? palette.snakeHead : palette.snakeBody;
           const px = seg.x * CELL;
           const py = seg.y * CELL;
           if (typeof ctx!.roundRect === "function") {
@@ -318,7 +413,7 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
             e1 = { x: cx + dx, y: cy - offset };
             e2 = { x: cx + dx, y: cy + offset };
           }
-          ctx!.fillStyle = "#04140b";
+          ctx!.fillStyle = palette.snakeEye;
           ctx!.beginPath();
           ctx!.arc(e1.x, e1.y, 2.2, 0, Math.PI * 2);
           ctx!.fill();
@@ -329,7 +424,8 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function drawHud() {
-        ctx!.fillStyle = "#fff";
+        const palette = paletteRef.current;
+        ctx!.fillStyle = palette.hudText;
         ctx!.font = "bold 18px monospace";
         ctx!.textAlign = "left";
         ctx!.textBaseline = "top";
@@ -339,7 +435,7 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
 
         const heartSize = 16;
         const heartSpacing = 4;
-        ctx!.fillStyle = "#ff2d55";
+        ctx!.fillStyle = palette.hudLives;
         for (let i = 0; i < lives; i++) {
           const hx = W - 10 - (lives - i) * (heartSize + heartSpacing);
           ctx!.beginPath();
@@ -366,7 +462,7 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function draw() {
-        ctx!.fillStyle = "#000";
+        ctx!.fillStyle = paletteRef.current.background;
         ctx!.fillRect(0, 0, W, H);
 
         drawFruit();
@@ -387,13 +483,20 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
             : gameState === "playing"
               ? "playing"
               : "gameover";
-        const next: GameHudState = { score, lives, level, phase };
+        const next: GameHudState = {
+          score,
+          lives,
+          level,
+          phase,
+          skin: skinRef.current,
+        };
         if (
           !lastHud ||
           lastHud.score !== next.score ||
           lastHud.lives !== next.lives ||
           lastHud.level !== next.level ||
-          lastHud.phase !== next.phase
+          lastHud.phase !== next.phase ||
+          lastHud.skin !== next.skin
         ) {
           lastHud = next;
           onHudChangeRef.current?.(next);
@@ -455,6 +558,9 @@ const SerpentinaGame = forwardRef<GameHandle, GameComponentProps>(
     return (
       <div className="game-arena game-arena-canvas">
         <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
+        <div className="game-skin-panel">
+          <SkinSelector value={skin} onChange={handleSkinChange} />
+        </div>
       </div>
     );
   },

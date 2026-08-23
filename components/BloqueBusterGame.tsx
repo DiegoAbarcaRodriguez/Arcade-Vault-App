@@ -1,24 +1,88 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type {
   GameComponentProps,
   GameHandle,
   GameHudState,
 } from "@/components/games/registry";
+import { loadSkin, saveSkin, type Skin } from "@/lib/games/skins";
+import SkinSelector from "@/components/games/SkinSelector";
 
 // Resolución lógica fija del juego (mismo tablero 4:3 nativo del original).
 const W = 800;
 const H = 600;
 
 type BlockColor =
-  | "red"
-  | "yellow"
-  | "cyan"
-  | "magenta"
-  | "hotpink"
-  | "green"
-  | "gray";
+  "red" | "yellow" | "cyan" | "magenta" | "hotpink" | "green" | "gray";
+
+/**
+ * Roles de color que necesita el motor de Bloque Buster. Los bloques,
+ * paddle y bola se dibujan desde un spritesheet PNG (no hay
+ * ctx.fillStyle/strokeStyle por pieza), así que en vez de reinventar el
+ * arte, `spriteFilter` es un CSS `ctx.filter` aplicado a esos dibujos
+ * (retinte del PNG completo sin tocar el archivo de assets); el resto de
+ * roles sí son literales directos como en los demás juegos.
+ */
+interface BloqueBusterPalette {
+  background: string; // fondo del canvas (fillRect de cada frame)
+  hudText: string; // texto del HUD (score/nivel), y color de las vidas
+  overlayDim: string; // rgba del velo semitransparente de GAME OVER/PAUSADO/WIN
+  overlayText: string; // texto del mensaje central del overlay
+  spriteFilter: string; // ctx.filter aplicado a bloques/paddle/bola/explosiones
+  glowBlur: number; // shadowBlur aplicado a sprites y texto de HUD/overlay
+  glowColor: string; // shadowColor de ese glow
+}
+
+// `clasico` es el look original del juego (spec 08): los mismos literales
+// ("#000", "#fff", "rgba(0,0,0,0.6)") que ya estaban hardcodeados en
+// draw()/drawOverlay() antes de este cambio, solo movidos a esta
+// estructura — no es un rediseño. spriteFilter "none" preserva el PNG tal
+// cual, sin retinte.
+const SKINS: Record<Skin, BloqueBusterPalette> = {
+  clasico: {
+    background: "#000000",
+    hudText: "#ffffff",
+    overlayDim: "rgba(0, 0, 0, 0.6)",
+    overlayText: "#ffffff",
+    spriteFilter: "none",
+    glowBlur: 0,
+    glowColor: "transparent",
+  },
+  // Fósforo verde de monitor CRT de 8-bit: el spritesheet a color se
+  // retiñe a monocromo verde vía ctx.filter (grayscale + sepia +
+  // hue-rotate es el truco estándar para lograr un verde fósforo sin
+  // generar arte nuevo), con glow para que no quede plano sobre el negro.
+  retro: {
+    background: "#000000",
+    hudText: "#33ff33",
+    overlayDim: "rgba(0, 20, 0, 0.65)",
+    overlayText: "#33ff33",
+    spriteFilter:
+      "grayscale(1) sepia(1) hue-rotate(70deg) saturate(3.2) brightness(1.05)",
+    glowBlur: 10,
+    glowColor: "#33ff33",
+  },
+  // Synthwave/arcade neón: mismo spritesheet pero con saturación y brillo
+  // elevados (mantiene los colores originales de cada bloque, pero más
+  // vívidos), fondo casi negro con leve tinte violeta y HUD en
+  // cyan/magenta coherentes con --cyan/--magenta de app/globals.css.
+  neon: {
+    background: "#05010f",
+    hudText: "#00f5ff",
+    overlayDim: "rgba(10, 0, 20, 0.65)",
+    overlayText: "#ff006e",
+    spriteFilter: "saturate(1.9) brightness(1.15) contrast(1.1)",
+    glowBlur: 8,
+    glowColor: "#00f5ff",
+  },
+};
 
 /**
  * Port de resources/04-arkanoid/{game.js,levels.js,assets/spritesheet.js}.
@@ -47,7 +111,25 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      setSkin: handleSkinChange,
     }));
+
+    // Skin activa: estado de React (para el <select>, y para persistirla)
+    // más un ref (para que el loop del motor, que corre dentro de un
+    // useEffect con deps vacías, siempre lea la paleta más reciente sin
+    // que cambiar de skin reinicie la partida en curso).
+    const [skin, setSkin] = useState<Skin>(() => loadSkin("bloque-buster"));
+    const paletteRef = useRef<BloqueBusterPalette>(SKINS[skin]);
+    const skinRef = useRef<Skin>(skin);
+    useEffect(() => {
+      paletteRef.current = SKINS[skin];
+      skinRef.current = skin;
+    }, [skin]);
+
+    const handleSkinChange = (next: Skin) => {
+      setSkin(next);
+      saveSkin("bloque-buster", next);
+    };
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -138,9 +220,25 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
         h: number,
       ) {
         if (!ssLoaded || !ssImg) return;
-        ctx!.drawImage(ssImg, frame.sx, frame.sy, frame.sw, frame.sh, x, y, w, h);
+        ctx!.drawImage(
+          ssImg,
+          frame.sx,
+          frame.sy,
+          frame.sw,
+          frame.sh,
+          x,
+          y,
+          w,
+          h,
+        );
       }
-      function drawSprite(name: string, x: number, y: number, w: number, h: number) {
+      function drawSprite(
+        name: string,
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+      ) {
         if (!ssLoaded || !ssImg) return;
         const sp: SpriteFrame | undefined = name.startsWith("block_")
           ? SPRITES.blocks[name.slice(6) as BlockColor]
@@ -339,7 +437,9 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
       };
       canvas.addEventListener("mousemove", handleMouseMove);
       canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
-      canvas.addEventListener("touchstart", handleTouchMove, { passive: false });
+      canvas.addEventListener("touchstart", handleTouchMove, {
+        passive: false,
+      });
 
       // ── Init ──────────────────────────────────────────────────────────────
       function initPaddle() {
@@ -388,7 +488,8 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
         // "paused"/"gameover"/"win" congelan la física; draw() sigue corriendo.
         if (gameState !== "playing") return;
 
-        if (keys.ArrowLeft) paddle.x = Math.max(0, paddle.x - PADDLE_SPEED * dt);
+        if (keys.ArrowLeft)
+          paddle.x = Math.max(0, paddle.x - PADDLE_SPEED * dt);
         if (keys.ArrowRight)
           paddle.x = Math.min(W - paddle.w, paddle.x + PADDLE_SPEED * dt);
 
@@ -447,7 +548,9 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
         }
 
         for (const exp of explosions) exp.elapsed += dt * 1000;
-        explosions = explosions.filter((exp) => exp.elapsed < EXPLOSION_DURATION);
+        explosions = explosions.filter(
+          (exp) => exp.elapsed < EXPLOSION_DURATION,
+        );
 
         if (ball.y > H) {
           lives--;
@@ -462,22 +565,45 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
 
       // ── Draw ──────────────────────────────────────────────────────────────
       function drawOverlay(message: string) {
-        ctx!.fillStyle = "rgba(0, 0, 0, 0.6)";
+        const palette = paletteRef.current;
+        ctx!.filter = "none";
+        ctx!.shadowBlur = 0;
+        ctx!.fillStyle = palette.overlayDim;
         ctx!.fillRect(0, 0, W, H);
-        ctx!.fillStyle = "#fff";
+        ctx!.fillStyle = palette.overlayText;
         ctx!.font = "bold 64px monospace";
         ctx!.textAlign = "center";
         ctx!.textBaseline = "middle";
+        ctx!.shadowBlur = palette.glowBlur;
+        ctx!.shadowColor = palette.glowColor;
         ctx!.fillText(message, W / 2, H / 2);
+        ctx!.shadowBlur = 0;
       }
 
       function draw() {
-        ctx!.fillStyle = "#000";
+        const palette = paletteRef.current;
+        ctx!.filter = "none";
+        ctx!.shadowBlur = 0;
+        ctx!.fillStyle = palette.background;
         ctx!.fillRect(0, 0, W, H);
+
+        // Bloques/paddle/bola/explosiones vienen de un spritesheet PNG: en
+        // vez de redibujar arte por skin, se retiñe el dibujo completo con
+        // ctx.filter (más shadowBlur/shadowColor de glow) — "none"/0 en
+        // clasico deja el PNG exactamente como está.
+        ctx!.filter = palette.spriteFilter;
+        ctx!.shadowBlur = palette.glowBlur;
+        ctx!.shadowColor = palette.glowColor;
 
         for (const block of blocks) {
           if (block.alive)
-            drawSprite("block_" + block.color, block.x, block.y, block.w, block.h);
+            drawSprite(
+              "block_" + block.color,
+              block.x,
+              block.y,
+              block.w,
+              block.h,
+            );
         }
 
         for (const exp of explosions) {
@@ -485,14 +611,23 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
             Math.floor((exp.elapsed / EXPLOSION_DURATION) * 4),
             3,
           );
-          drawFrame(EXPLOSION_FRAMES[exp.color][frameIndex], exp.x, exp.y, exp.w, exp.h);
+          drawFrame(
+            EXPLOSION_FRAMES[exp.color][frameIndex],
+            exp.x,
+            exp.y,
+            exp.w,
+            exp.h,
+          );
         }
 
         drawSprite("paddle", paddle.x, paddle.y, paddle.w, paddle.h);
         drawSprite("ball", ball.x, ball.y, ball.w, ball.h);
 
+        ctx!.filter = "none";
+        ctx!.shadowBlur = 0;
+
         if (gameState === "playing" || gameState === "paused") {
-          ctx!.fillStyle = "#fff";
+          ctx!.fillStyle = palette.hudText;
           ctx!.font = "bold 18px monospace";
           ctx!.textAlign = "left";
           ctx!.textBaseline = "top";
@@ -501,10 +636,15 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
           ctx!.fillText("Nivel: " + currentLevel, W / 2, 10);
           const ballSize = 16;
           const ballSpacing = 4;
+          ctx!.filter = palette.spriteFilter;
+          ctx!.shadowBlur = palette.glowBlur;
+          ctx!.shadowColor = palette.glowColor;
           for (let i = 0; i < lives; i++) {
             const bx = W - 10 - (lives - i) * (ballSize + ballSpacing);
             drawSprite("ball", bx, 10, ballSize, ballSize);
           }
+          ctx!.filter = "none";
+          ctx!.shadowBlur = 0;
         }
 
         if (gameState === "gameover") drawOverlay("GAME OVER");
@@ -526,13 +666,20 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
             : gameState === "playing"
               ? "playing"
               : "gameover";
-        const next: GameHudState = { score, lives, level: currentLevel, phase };
+        const next: GameHudState = {
+          score,
+          lives,
+          level: currentLevel,
+          phase,
+          skin: skinRef.current,
+        };
         if (
           !lastHud ||
           lastHud.score !== next.score ||
           lastHud.lives !== next.lives ||
           lastHud.level !== next.level ||
-          lastHud.phase !== next.phase
+          lastHud.phase !== next.phase ||
+          lastHud.skin !== next.skin
         ) {
           lastHud = next;
           onHudChangeRef.current?.(next);
@@ -589,6 +736,9 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
     return (
       <div className="game-arena game-arena-canvas">
         <canvas ref={canvasRef} width={W} height={H} className="game-canvas" />
+        <div className="game-skin-panel">
+          <SkinSelector value={skin} onChange={handleSkinChange} />
+        </div>
       </div>
     );
   },

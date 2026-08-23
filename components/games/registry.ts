@@ -10,6 +10,7 @@ import TetrisTouchControls from "@/components/TetrisTouchControls";
 import BloqueBusterGame from "@/components/BloqueBusterGame";
 import SerpentinaGame from "@/components/SerpentinaGame";
 import SerpentinaTouchControls from "@/components/SerpentinaTouchControls";
+import type { Skin } from "@/lib/games/skins";
 
 /**
  * Contrato compartido que todo juego jugable debe cumplir para que
@@ -25,11 +26,20 @@ export interface GameHudState {
   // canvas dibuja en su propio HUD interno; el panel externo de
   // GamePlayer no las muestra.
   extra?: Record<string, string | number>;
+  // Skin visual activa (clásico/retro/neón), solo en juegos que la
+  // soportan. GamePlayer usa su presencia para decidir si renderiza el
+  // <SkinSelector> en el HUD de escritorio (ver GameHandle.setSkin).
+  skin?: Skin;
 }
 
 export interface GameHandle {
   togglePause: () => void;
   forceGameOver: () => void; // usado por el botón FIN tras confirmar
+  // Solo presente en juegos con skins; GamePlayer lo llama desde el
+  // <SkinSelector> que renderiza en su HUD (fuera del canvas) en
+  // escritorio. En mobile, el propio juego sigue mostrando su overlay
+  // interno (ver .game-skin-panel en app/globals.css).
+  setSkin?: (skin: Skin) => void;
 }
 
 export interface GameComponentProps {

@@ -1,11 +1,19 @@
 "use client";
 
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type {
   GameComponentProps,
   GameHandle,
   GameHudState,
 } from "@/components/games/registry";
+import { loadSkin, saveSkin, type Skin } from "@/lib/games/skins";
+import SkinSelector from "@/components/games/SkinSelector";
 
 // Resolución lógica fija del tablero (ver spec 07): 10×20 celdas de 30px,
 // igual que resources/03-tetris. El panel (HUD interno + siguiente pieza)
@@ -17,17 +25,118 @@ const PANEL_W = 200;
 const PANEL_H = 600;
 const NEXT_BLOCK = 24;
 
-const COLORS: (string | null)[] = [
-  null,
-  "#4dd0e1", // I - cyan
-  "#ffd54f", // O - yellow
-  "#ba68c8", // T - purple
-  "#81c784", // S - green
-  "#e57373", // Z - red
-  "#90caf9", // J - pale blue
-  "#ffb74d", // L - orange
-  "#9e9e9e", // N - tuerca (gris metálico)
-];
+/**
+ * Roles de color que necesita el motor de Tetris: 8 colores de pieza
+ * (índice 0 sin usar — el tablero guarda 0 como celda vacía), el
+ * resaltado superior de cada bloque, la grilla del tablero, los fondos
+ * de tablero/panel, el texto del panel (SCORE/LINES/LEVEL/NEXT) y el
+ * overlay de pausa/game-over. Cada skin es un objeto con esta misma forma.
+ */
+interface TetrisPalette {
+  boardBackground: string; // fondo del canvas del tablero
+  panelBackground: string; // fondo del canvas del panel lateral
+  gridLine: string; // líneas finas de la grilla del tablero
+  pieceColors: [
+    null,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ]; // índice 0 nulo (celda vacía), 1-8 = I,O,T,S,Z,J,L,N
+  blockHighlight: string; // franja superior clara de cada bloque
+  glowBlur: number; // shadowBlur (px) aplicado a los bloques
+  hudLabel: string; // etiquetas SCORE/LINES/LEVEL/NEXT del panel
+  hudValue: string; // valores numéricos del panel
+  overlayBg: string; // velo semitransparente de pausa/game-over
+  overlayTitle: string; // título "GAME OVER"/"PAUSADO"
+  overlaySub: string; // subtítulo del overlay
+}
+
+// `clasico` es el look original del juego (spec 07): los mismos literales
+// que ya estaban hardcodeados en COLORS/ctx.fillStyle antes de este
+// cambio, solo movidos a esta estructura — no es un rediseño.
+const SKINS: Record<Skin, TetrisPalette> = {
+  clasico: {
+    boardBackground: "#000000",
+    panelBackground: "#000000",
+    gridLine: "rgba(255,255,255,0.08)",
+    pieceColors: [
+      null,
+      "#4dd0e1", // I - cyan
+      "#ffd54f", // O - yellow
+      "#ba68c8", // T - purple
+      "#81c784", // S - green
+      "#e57373", // Z - red
+      "#90caf9", // J - pale blue
+      "#ffb74d", // L - orange
+      "#9e9e9e", // N - tuerca (gris metálico)
+    ],
+    blockHighlight: "rgba(255,255,255,0.12)",
+    glowBlur: 0,
+    hudLabel: "rgba(255,255,255,0.5)",
+    hudValue: "#ffffff",
+    overlayBg: "rgba(0,0,0,0.6)",
+    overlayTitle: "#ffffff",
+    overlaySub: "rgba(255,255,255,0.65)",
+  },
+  // Consola de 4 bits: paleta reducida a tonos saturados planos (sin
+  // pasteles) con glow de fósforo, en vez de fósforo mono-color — con
+  // 8 piezas a distinguir, un solo tono ámbar/verde las volvería
+  // indistinguibles entre sí.
+  retro: {
+    boardBackground: "#000000",
+    panelBackground: "#000000",
+    gridLine: "rgba(255,176,0,0.15)",
+    pieceColors: [
+      null,
+      "#00e5e5", // I - cian fósforo
+      "#e5e500", // O - amarillo fósforo
+      "#b000e5", // T - magenta fósforo
+      "#00e500", // S - verde fósforo
+      "#e50000", // Z - rojo fósforo
+      "#5566ff", // J - azul fósforo (aclarado para contraste sobre negro)
+      "#e58500", // L - ámbar
+      "#b5b5b5", // N - gris metálico claro
+    ],
+    blockHighlight: "rgba(255,255,255,0.18)",
+    glowBlur: 6,
+    hudLabel: "rgba(255,176,0,0.55)",
+    hudValue: "#ffb000",
+    overlayBg: "rgba(10,5,0,0.75)",
+    overlayTitle: "#ffb000",
+    overlaySub: "rgba(255,176,0,0.7)",
+  },
+  // Synthwave/arcade neón: reusa los hex de --cyan/--magenta/--yellow/--green
+  // de app/globals.css para las piezas más importantes (I, T, S) y suma
+  // tonos complementarios saturados para el resto.
+  neon: {
+    boardBackground: "#000000",
+    panelBackground: "#000000",
+    gridLine: "rgba(0,245,255,0.15)",
+    pieceColors: [
+      null,
+      "#00f5ff", // I - cyan
+      "#f5ff00", // O - yellow
+      "#ff006e", // T - magenta
+      "#00ff88", // S - green
+      "#ff3860", // Z - rojo neón
+      "#7c4dff", // J - violeta neón
+      "#ff8c00", // L - naranja neón
+      "#e0e0ff", // N - plata neón
+    ],
+    blockHighlight: "rgba(255,255,255,0.2)",
+    glowBlur: 8,
+    hudLabel: "rgba(0,245,255,0.55)",
+    hudValue: "#00f5ff",
+    overlayBg: "rgba(0,0,0,0.7)",
+    overlayTitle: "#ff006e",
+    overlaySub: "rgba(0,245,255,0.75)",
+  },
+};
 
 const PIECES: (number[][] | null)[] = [
   null,
@@ -105,7 +214,25 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      setSkin: handleSkinChange,
     }));
+
+    // Skin activa: estado de React (para el <select>, y para persistirla)
+    // más un ref (para que el loop del motor, que corre dentro de un
+    // useEffect con deps vacías, siempre lea la paleta más reciente sin
+    // que cambiar de skin reinicie la partida en curso).
+    const [skin, setSkin] = useState<Skin>(() => loadSkin("tetris"));
+    const paletteRef = useRef<TetrisPalette>(SKINS[skin]);
+    const skinRef = useRef<Skin>(skin);
+    useEffect(() => {
+      paletteRef.current = SKINS[skin];
+      skinRef.current = skin;
+    }, [skin]);
+
+    const handleSkinChange = (next: Skin) => {
+      setSkin(next);
+      saveSkin("tetris", next);
+    };
 
     useEffect(() => {
       const boardCanvas = boardCanvasRef.current;
@@ -299,15 +426,19 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
         baseY = 0,
       ) {
         if (!colorIndex) return;
+        const palette = paletteRef.current;
         context.globalAlpha = alpha ?? 1;
-        context.fillStyle = COLORS[colorIndex] as string;
+        context.shadowBlur = palette.glowBlur;
+        context.shadowColor = palette.pieceColors[colorIndex] as string;
+        context.fillStyle = palette.pieceColors[colorIndex] as string;
         context.fillRect(
           baseX + x * size + 1,
           baseY + y * size + 1,
           size - 2,
           size - 2,
         );
-        context.fillStyle = "rgba(255,255,255,0.12)";
+        context.shadowBlur = 0;
+        context.fillStyle = palette.blockHighlight;
         context.fillRect(
           baseX + x * size + 1,
           baseY + y * size + 1,
@@ -318,7 +449,7 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function drawGrid() {
-        ctx!.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx!.strokeStyle = paletteRef.current.gridLine;
         ctx!.lineWidth = 0.5;
         for (let c = 1; c < COLS; c++) {
           ctx!.beginPath();
@@ -335,19 +466,20 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
       }
 
       function drawOverlay(title: string, sub: string) {
-        ctx!.fillStyle = "rgba(0,0,0,0.6)";
+        const palette = paletteRef.current;
+        ctx!.fillStyle = palette.overlayBg;
         ctx!.fillRect(0, 0, COLS * BLOCK, ROWS * BLOCK);
         ctx!.textAlign = "center";
-        ctx!.fillStyle = "#fff";
+        ctx!.fillStyle = palette.overlayTitle;
         ctx!.font = "bold 22px monospace";
         ctx!.fillText(title, (COLS * BLOCK) / 2, (ROWS * BLOCK) / 2 - 12);
         ctx!.font = "13px monospace";
-        ctx!.fillStyle = "rgba(255,255,255,0.65)";
+        ctx!.fillStyle = palette.overlaySub;
         ctx!.fillText(sub, (COLS * BLOCK) / 2, (ROWS * BLOCK) / 2 + 14);
       }
 
       function drawBoard() {
-        ctx!.fillStyle = "#000";
+        ctx!.fillStyle = paletteRef.current.boardBackground;
         ctx!.fillRect(0, 0, COLS * BLOCK, ROWS * BLOCK);
         drawGrid();
 
@@ -385,15 +517,16 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
 
       // ── Draw: panel (HUD interno + siguiente pieza) ────────────────────────
       function drawPanel() {
-        panelCtx!.fillStyle = "#000";
+        const palette = paletteRef.current;
+        panelCtx!.fillStyle = palette.panelBackground;
         panelCtx!.fillRect(0, 0, PANEL_W, PANEL_H);
         panelCtx!.textAlign = "left";
 
         const stat = (label: string, value: string, y: number) => {
-          panelCtx!.fillStyle = "rgba(255,255,255,0.5)";
+          panelCtx!.fillStyle = palette.hudLabel;
           panelCtx!.font = "12px monospace";
           panelCtx!.fillText(label, 16, y);
-          panelCtx!.fillStyle = "#fff";
+          panelCtx!.fillStyle = palette.hudValue;
           panelCtx!.font = "bold 22px monospace";
           panelCtx!.fillText(value, 16, y + 26);
         };
@@ -402,7 +535,7 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
         stat("LINES", String(lines), 96);
         stat("LEVEL", String(level), 162);
 
-        panelCtx!.fillStyle = "rgba(255,255,255,0.5)";
+        panelCtx!.fillStyle = palette.hudLabel;
         panelCtx!.font = "12px monospace";
         panelCtx!.fillText("NEXT", 16, 228);
 
@@ -438,12 +571,14 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
           level,
           phase,
           extra: { lines },
+          skin: skinRef.current,
         };
         if (
           !lastHud ||
           lastHud.score !== next.score ||
           lastHud.level !== next.level ||
           lastHud.phase !== next.phase ||
+          lastHud.skin !== next.skin ||
           lastHud.extra?.lines !== next.extra?.lines
         ) {
           lastHud = next;
@@ -515,6 +650,9 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
           height={PANEL_H}
           className="tetris-panel-canvas"
         />
+        <div className="game-skin-panel">
+          <SkinSelector value={skin} onChange={handleSkinChange} />
+        </div>
       </div>
     );
   },

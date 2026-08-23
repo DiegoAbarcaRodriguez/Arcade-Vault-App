@@ -1233,6 +1233,66 @@ a {
   transform: translateY(-50%);
 }
 
+/* Selector de skin visual (clásico/retro/neón). En escritorio vive en el
+   HUD externo (GamePlayer.tsx, junto a PAUSA/FIN/pantalla completa) para
+   no taparle el canvas al juego; ahí no tiene sentido el overlay. En
+   mobile ese HUD no tiene espacio de sobra, así que el propio juego lo
+   muestra como overlay flotante sobre su canvas — mismo breakpoint que
+   .touch-controls. Reusable por cualquier juego con skins. */
+.hud-skin-select {
+  display: flex;
+}
+@media (max-width: 840px) {
+  .hud-skin-select {
+    display: none;
+  }
+}
+.game-skin-panel {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+}
+@media (max-width: 840px) {
+  .game-skin-panel {
+    display: flex;
+  }
+}
+.skin-selector {
+  appearance: none;
+  height: 30px;
+  padding: 0 28px 0 10px;
+  background: rgba(10, 10, 15, 0.7);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(0, 245, 255, 0.3);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--cyan) 50%),
+    linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) center,
+    calc(100% - 11px) center;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+.skin-selector:hover,
+.skin-selector:focus {
+  outline: 0;
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.55);
+}
+.skin-selector option {
+  background: var(--bg-2);
+  color: var(--ink);
+}
+
 /* Controles táctiles de Asteroids: overlay sobre el canvas, sin
    consumir espacio de layout adicional. Mismo breakpoint que usa el
    nav para pasar a menú hamburguesa (ver @media 840px más arriba). */

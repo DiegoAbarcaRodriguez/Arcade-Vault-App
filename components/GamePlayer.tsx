@@ -9,6 +9,8 @@ import {
   type GameHandle,
   type GameHudState,
 } from "@/components/games/registry";
+import SkinSelector from "@/components/games/SkinSelector";
+import type { Skin } from "@/lib/games/skins";
 
 export default function GamePlayer({ game }: { game: GameWithStats }) {
   const [hud, setHud] = useState<GameHudState | null>(null);
@@ -153,6 +155,10 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
     gameRef.current?.togglePause();
   };
 
+  const handleSkinChange = (skin: Skin) => {
+    gameRef.current?.setSkin?.(skin);
+  };
+
   const handleFullscreen = () => {
     if (!isPlayable) return;
     // Se pide fullscreen sobre .crt-screen (no sobre el canvas del juego):
@@ -217,6 +223,11 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
           )}
         </div>
         <div className="hud-actions">
+          {hud?.skin && (
+            <div className="hud-skin-select">
+              <SkinSelector value={hud.skin} onChange={handleSkinChange} />
+            </div>
+          )}
           <button type="button" className="btn yellow" onClick={handlePause}>
             PAUSA
           </button>
