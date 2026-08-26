@@ -210,10 +210,12 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
     const controlsRef = useRef<GameHandle>({
       togglePause: () => {},
       forceGameOver: () => {},
+      restart: () => {},
     });
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      restart: () => controlsRef.current.restart(),
       setSkin: handleSkinChange,
     }));
 
@@ -597,6 +599,11 @@ const TetrisGame = forwardRef<GameHandle, GameComponentProps>(
       controlsRef.current.forceGameOver = () => {
         if (phase === "gameover") return;
         phase = "gameover";
+        reportHud();
+      };
+
+      controlsRef.current.restart = () => {
+        initGame();
         reportHud();
       };
 

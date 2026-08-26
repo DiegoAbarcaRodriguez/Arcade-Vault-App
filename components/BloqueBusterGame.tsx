@@ -107,10 +107,12 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
     const controlsRef = useRef<GameHandle>({
       togglePause: () => {},
       forceGameOver: () => {},
+      restart: () => {},
     });
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      restart: () => controlsRef.current.restart(),
       setSkin: handleSkinChange,
     }));
 
@@ -698,6 +700,11 @@ const BloqueBusterGame = forwardRef<GameHandle, GameComponentProps>(
       controlsRef.current.forceGameOver = () => {
         if (gameState === "gameover" || gameState === "win") return;
         gameState = "gameover";
+        reportHud();
+      };
+
+      controlsRef.current.restart = () => {
+        initGame();
         reportHud();
       };
 

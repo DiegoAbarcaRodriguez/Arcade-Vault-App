@@ -195,6 +195,11 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
     setConfirmingEnd(false);
   };
 
+  const handleRestart = () => {
+    if (!isPlayable) return;
+    gameRef.current?.restart();
+  };
+
   return (
     <div className="av-player fade-in" ref={playerRef}>
       <div className="player-hud">
@@ -320,6 +325,13 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
                 <div className="actions">
                   <button
                     type="button"
+                    className="btn magenta"
+                    onClick={handleRestart}
+                  >
+                    JUGAR DE NUEVO
+                  </button>
+                  <button
+                    type="button"
                     className="btn ghost"
                     onClick={() => setScoreDismissed(true)}
                   >
@@ -360,6 +372,9 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
                     disabled={!scoreName.trim() || savingScore}
                   >
                     {savingScore ? "GUARDANDO..." : "GUARDAR PUNTAJE"}
+                  </button>
+                  <button type="button" className="btn" onClick={handleRestart}>
+                    JUGAR DE NUEVO
                   </button>
                   <button
                     type="button"

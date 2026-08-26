@@ -119,10 +119,12 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
     const controlsRef = useRef<GameHandle>({
       togglePause: () => {},
       forceGameOver: () => {},
+      restart: () => {},
     });
     useImperativeHandle(ref, () => ({
       togglePause: () => controlsRef.current.togglePause(),
       forceGameOver: () => controlsRef.current.forceGameOver(),
+      restart: () => controlsRef.current.restart(),
       setSkin: handleSkinChange,
     }));
 
@@ -786,6 +788,11 @@ const AsteroidsGame = forwardRef<GameHandle, GameComponentProps>(
         ship.dead = true;
         lives = 0;
         phase = "gameover";
+        reportHud();
+      };
+
+      controlsRef.current.restart = () => {
+        initGame();
         reportHud();
       };
 

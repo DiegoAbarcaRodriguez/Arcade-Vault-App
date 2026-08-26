@@ -1,135 +1,253 @@
-# Spec 01 — Ranaria jugable (alternativa: mínima)
+# SPEC — Frogger: integración core del juego
 
-- **Estado:** Draft
-- **Depende de:** 06-leaderboard-y-juegos (registro de juegos, Supabase)
-- **Fecha:** 2026-08-14
-- **Objetivo:** Crear desde cero una versión mínima de Frogger ("cruzá la carretera y llegá a los 5 hogares sin que te atropellen") como `components/RanariaGame.tsx` bajo el contrato `GAME_REGISTRY`, con un único carril de mecánica (carretera, sin río), dar de alta la fila `games` como `ranaria` (metadata reusada de `lib/archived-games.ts`), y dejarlo jugable end-to-end con leaderboard real en `/jugar/ranaria`.
-- **Alternativa de implementación:** A de 2 para "Frogger" — excluyente con `specs/game-jam/frogger/02-ranaria-rio-jugable.md`; mismo juego (mover una rana casilla por casilla desde el césped inicial hasta los 5 hogares evitando morir en el intento), distinto alcance de mecánica/engine.
+> **Estado:** Implementado
+> **Depende de:** 06-games-table-leaderboard-supabase
+> **Fecha:** 2026-05-20
+> **Objetivo:** Integrar Frogger (canvas puro, construido desde cero) como juego jugable en Arcade Vault con ID `frogger`, conectando score, vidas, nivel y game over con el HUD React y la play-page dedicada.
 
-## Alcance
+---
 
-**Incluye:**
+## Scope
 
-- **Fila `games`** nueva: `id: "ranaria"`, `title: "RANARIA"`, `cat: "ARCADE"`, `cover: "cover-rana"` (clase **ya existente** en `app/globals.css`, línea ~849), `color: "green"`, con `short`/`long` reusados tal cual de la entrada archivada `ranaria` en `lib/archived-games.ts`.
-- **`components/RanariaGame.tsx`**: motor propio (sin origen en `resources/`), bajo el contrato `GameComponentProps`/`GameHandle` (`components/games/registry.ts`), sin dependencias externas ni assets.
-- **Un solo `<canvas>` 800×600** dentro de `.game-arena.game-arena-canvas` (clase `game-canvas`), coincide nativamente con `.crt-screen` (4:3).
-- **Grilla lógica de 20 columnas × 15 filas** (celdas de 40×40px) dibujada sobre el canvas:
-  - Fila 14 (abajo): césped de inicio, la rana reaparece siempre centrada ahí tras perder una vida.
-  - Filas 8–13: césped seguro decorativo (sin peligro).
-  - Fila 7: mediana segura.
-  - Filas 2–6: **5 carriles de carretera**, cada uno con dirección alternada (izq↔der) y una velocidad fija propia (sin escalar con el tiempo ni con el progreso), poblados por "autos" (rectángulos de 2 celdas de ancho) que se generan en loop desde un extremo del carril.
-  - Fila 1: césped seguro.
-  - Fila 0 (arriba): **5 hogares** (slots de 3 celdas de ancho cada uno, separados por seto), donde la rana debe terminar cada cruce exitoso.
-- **Mecánica central**: la rana se mueve **una casilla por pulsación** (movimiento discreto, no continuo) en las 4 direcciones. Pisar un auto en un carril de carretera resta una vida y reaparece en el césped de inicio. Llegar a la fila 0 dentro de un slot de hogar vacío lo marca como "ocupado" (deja de poder pisarse) y suma puntos; llegar fuera de un slot (contra el seto) resta una vida sin marcar hogar. Cuando los 5 hogares están ocupados simultáneamente, se limpian todos a la vez (vuelven a estar disponibles) y el juego sigue sin cambiar de dificultad — no hay progresión de nivel en esta alternativa.
-- **Puntaje**: +10 la primera vez que la rana alcanza una fila más alta (numéricamente menor) que cualquiera alcanzada en la vida actual; +100 al ocupar un hogar vacío. El score nunca baja.
-- **Vidas**: inicia en 3; se pierde una al ser atropellada o al llegar a la fila 0 fuera de un slot de hogar; al llegar a 0 vidas, `phase: "gameover"`.
-- **HUD interno dibujado en canvas**: grilla de césped/carretera/hogares, autos, rana, contador de hogares ocupados (`X/5`), score/vidas como texto — mismo espíritu que el HUD interno de Asteroids/Serpentina.
-- **HUD externo (`GameHudState`)**: `score→score`, `lives→lives` (inicia en 3), `hogares ocupados→extra.hogares`; sin `level` (esta alternativa no tiene progresión de dificultad). `phase` transiciona `playing → paused → playing` (pausa externa vía `togglePause()`) y `playing → gameover` al perder la tercera vida.
-- **Controles de teclado**: `ArrowUp`/`ArrowDown`/`ArrowLeft`/`ArrowRight`, con `preventDefault()`, detectados por flanco de bajada (un salto de una celda por pulsación, no repetición continua mientras se mantiene apretada).
-- **`components/RanariaTouchControls.tsx`**: cruceta de 4 botones (arriba/abajo/izquierda/derecha) que despachan `KeyboardEvent` sintéticos con esos mismos códigos, reusando `.touch-controls`/`.touch-group`/`.touch-btn` — necesario porque el esquema de 4 direcciones discretas no coincide con `TouchControls` existente (que cubre `←→↑Espacio`, sin `↓`).
-- **Alta en `GAME_REGISTRY`**: entrada `ranaria: { Game: RanariaGame, Touch: RanariaTouchControls, showLives: true, showLevel: false }`.
+**In:**
 
-**No incluye (queda fuera de este spec):**
+- INSERT SQL para añadir la fila `frogger` a la tabla `games` en Supabase.
+- Crear `components/games/FroggerGame.tsx` — componente React `"use client"` que encapsula el canvas principal (480 × 640 px). Acepta props: `paused`, `onScoreChange`, `onLivesChange`, `onLevelChange`, `onGameOver`.
+- Game loop construido desde cero en el componente: cuadrícula de 16 columnas × 14 filas de 40 × 40 px. El mapa vertical se divide en tres zonas fijas: zona segura inferior (fila 13 — base de inicio), zona de carretera (filas 12–8, 5 carriles de tráfico), zona de río (filas 7–2, 6 carriles fluviales) y zona de metas (fila 1, 5 bocas destino).
+- Entidades de carretera: coches y camiones de distintas longitudes (1–3 celdas), velocidades y direcciones por carril; se mueven horizontalmente en loop continuo; colisión con la rana es letal.
+- Entidades de río: troncos (longitud 2–4 celdas) y tortugas (grupos de 2–3) por carril; se mueven horizontalmente. La rana sólo sobrevive en el río si está encima de un tronco o tortugas visibles; si cae al agua, muere. Las tortugas pueden sumergirse periódicamente (fase visible → bajo el agua → visible); mientras están bajo el agua no sirven de apoyo.
+- Movimiento de la rana: basado en saltos discretos de 1 celda (40 px) en 4 direcciones (↑ ↓ ← →); cada pulsación desplaza la rana exactamente una celda tras completar una animación de salto de 120 ms. La rana no puede moverse fuera de los bordes laterales.
+- Condición de meta alcanzada: la rana llega a una de las 5 bocas destino de la fila superior (cada boca ocupa 2 columnas de las 16). Una boca ya ocupada no puede volver a usarse en la misma ronda. Al rellenar las 5 bocas se completa la ronda y comienza la siguiente.
+- Condición de muerte: (a) colisión con vehículo, (b) caída al agua, (c) sumergirse la tortuga bajo la rana, (d) salir por los bordes izquierdo/derecho del río, (e) agotar el temporizador de ronda (15 s iniciales reducidos en niveles altos).
+- Sistema de vidas: la rana arranca con 3 vidas. Cada muerte resta 1 vida y llama `onLivesChange(lives - 1)`. Si `lives - 1 === 0` se llama `onLivesChange(0)` y luego `onGameOver(finalScore)`.
+- Puntuación: +10 pts por cada celda avanzada hacia arriba por primera vez en la ronda; +50 pts al ocupar una boca destino; +200 pts al completar una ronda; +bonus de tiempo = `tiempo_restante × 10` al ocupar una boca.
+- Temporizador de ronda visible en HUD: 15 s por defecto, decrementado en rondas altas.
+- HUD interno del canvas (score top-left, vidas como iconos de rana top-right, nivel top-center, barra de tiempo en la fila 0) — patrón doble HUD igual que los demás juegos de la plataforma.
+- Prop `paused: boolean` congela `update()` pero sigue llamando a `draw()`.
+- Limpiar los event listeners (`keydown` en `document`) en el `return` del `useEffect`.
+- Crear `app/games/frogger/play/page.tsx` — play-page específica.
+- Guardar score al terminar: modal React pre-rellena nombre desde `localStorage` (`av_player_name`), inserta en Supabase y persiste el nombre para la próxima partida.
 
-- La alternativa hermana de este mismo juego (`ranaria-rio`, spec 02, en `specs/game-jam/frogger/02-ranaria-rio-jugable.md`) — es la **misma mecánica central** (cruzar hasta los 5 hogares evitando morir) con más alcance: agrega la zona de río con troncos/tortugas flotantes, temporizador por vida y progresión de nivel/dificultad. Ninguno de esos tres sistemas (río, temporizador, nivel) se implementa acá.
-- Cualquier otro juego de `resources/` o de `lib/archived-games.ts` distinto de `ranaria`.
-- Persistir métricas adicionales (hogares totales ocupados en la partida, cruces exitosos) como columnas propias en `scores` — el leaderboard sigue guardando solo `score`.
-- Sonido, animaciones más allá de lo mínimo necesario para leer el estado del juego (posición de autos, rana, hogares ocupados), o cualquier obstáculo que no sean autos (sin río, sin agua, sin depredadores).
-- Cambiar el tab por defecto de `/salon` (sigue siendo `asteroides`; `ranaria` disponible como tab adicional si se aprueba e implementa).
+**Fuera de alcance:**
 
-## Modelo de datos
+- Sprites bitmap externos — todos los elementos se dibujan con primitivas canvas (rectángulos, arcos, formas compuestas) con colores temáticos; no se carga ninguna imagen.
+- Controles táctiles o mobile.
+- Animaciones de muerte elaboradas (explosiones, partículas) — se cubre en spec secundario.
+- Power-ups especiales (mosca en la boca destino, cocodrilo disfrazado de tronco) — se cubre en spec secundario.
+- Supabase Auth y RLS — `user_id` se almacena como `null`.
+- Realtime en el leaderboard.
+- Componente genérico `CanvasGame` (YAGNI).
 
-### Fila `games` (migración SQL)
+---
+
+## Data model
+
+### INSERT en tabla `games`
 
 ```sql
-insert into games (id, title, short, long, cat, cover, color)
-values (
-  'ranaria',
-  'RANARIA',
-  'Cruza la autopista de pixeles.',
-  'Salta entre carriles de coches a toda velocidad y troncos a la deriva en el río. Llega a los nenúfares antes de que se acabe el tiempo.',
+INSERT INTO games (id, title, short, long, cat, cover, color)
+VALUES (
+  'frogger',
+  'FROGGER',
+  'Cruza la carretera y el río sin convertirte en papilla.',
+  'Guía a tu rana a través de una carretera repleta de coches y un río de troncos y tortugas flotantes. Llena las cinco bocas del otro lado para completar la ronda; cada nivel acelera el tráfico y acorta el tiempo. Tres vidas y mucho asfalto por delante.',
   'ARCADE',
-  'cover-rana',
-  'green'
+  'cover-frogger',
+  'lime'
 );
 ```
 
-(`title`/`short`/`long`/`cat`/`cover`/`color` son los ya redactados para la entrada archivada `ranaria` en `lib/archived-games.ts` — se reusan tal cual, id incluido. Nota: el texto de `long` menciona río/troncos que esta alternativa concreta no implementa; ver Riesgos.)
-
-### Tipos TypeScript
-
-No se agregan tipos nuevos más allá de los ya definidos en `components/games/registry.ts` (`GameHudState`, `GameHandle`, `GameComponentProps`). El estado propio del motor (`frog`, `lanes[]`, `vehicles[]`, `homes[]`, `lives`, `score`, `maxRowReachedThisLife`) es interno a `RanariaGame.tsx`, sin tipos exportados.
-
-`GameHudState.extra` para Ranaria:
+### Props del componente `FroggerGame`
 
 ```ts
-extra: {
-  hogares: number; // 0–5, cuántos slots de hogar están ocupados ahora mismo
+interface FroggerGameProps {
+  paused: boolean;
+  onScoreChange: (score: number) => void;
+  onLivesChange: (lives: number) => void;
+  onLevelChange: (level: number) => void;
+  onGameOver: (finalScore: number) => void;
 }
 ```
 
-### Layout del canvas (dentro de `.game-arena.game-arena-canvas`)
+El estado local arranca con `lives = 3`, `score = 0`, `level = 1`.
+`onLivesChange(n)` se dispara cada vez que la rana muere.
+`onLivesChange(0)` se dispara justo antes de `onGameOver(score)` en cualquier condición de fin de partida.
 
-```tsx
-<div className="game-arena game-arena-canvas">
-  <canvas ref={canvasRef} width={800} height={600} className="game-canvas" />
-</div>
-```
+No se introducen nuevas tablas ni tipos TypeScript — se reutilizan `GameRow` y `ScoreRow` de `lib/supabase/types.ts`.
 
-Un solo canvas, mismo patrón que `AsteroidsGame.tsx`/`BloqueBusterGame.tsx` — `.game-arena.game-arena-canvas`/`.game-canvas` ya cubren fondo negro, `object-fit: contain` en fullscreen y `touch-action: none`. No se agregan clases CSS nuevas de layout (la grilla 20×15 se dibuja íntegramente dentro del canvas 800×600 ya existente, celdas de 40×40px).
+---
 
-## Plan de implementación
+## Implementation plan
 
-1. **Migración `insert into games`** vía `mcp__supabase__apply_migration`, con los valores de la fila `ranaria` definidos en el modelo de datos. Verificable: `select * from games` incluye la fila `ranaria` junto a las ya existentes.
+1. **INSERT en Supabase** — ejecutar el SQL del data model en el SQL Editor de Supabase.
+   Verificación: la fila `frogger` aparece en el Table Editor; `/games` muestra la card con cover `cover-frogger` y color `lime`.
 
-2. **`.cover-rana` en `app/globals.css`**: **no requiere cambios**, la clase ya existe (línea ~849) con su gradiente y sprite de rana en CSS puro. Verificable: la portada de `ranaria` se ve correctamente en `/biblioteca` sin tocar CSS.
+2. **Definir constantes y tipos** dentro de `FroggerGame.tsx`:
 
-3. **`components/RanariaGame.tsx`** — motor propio portado al patrón `forwardRef<GameHandle, GameComponentProps>` (boilerplate de `reference.md` §2):
-   - Grilla de 20×15 celdas de 40px definida como constante del módulo dentro del `useEffect` (lanes de carretera con `{row, direction, speed, vehicles[]}`, slots de hogar con `{col, ocupado}`).
-   - Movimiento discreto de la rana: cada pulsación de flecha mueve exactamente una celda, con un pequeño cooldown (ej. 120ms) para evitar doble salto por rebote de tecla; clamp a los límites de la grilla.
-   - Loop de autos: cada carril mueve sus vehículos a velocidad constante propia, reciclándolos cuando salen del canvas por el lado opuesto.
-   - Colisión rana-auto: overlap de rectángulos (celda de la rana vs. rectángulo del auto) evaluado cada frame mientras la rana está en fila de carretera.
-   - Llegada a fila 0: si cae dentro de un slot vacío → lo marca ocupado, +100 score, reset de posición al césped de inicio; si los 5 quedan ocupados, limpiar los 5 a la vez; si cae fuera de un slot → pierde una vida.
-   - Avance de fila: al alcanzar por primera vez en la vida actual una fila con número menor al mínimo ya alcanzado, +10 score.
-   - `togglePause()`/`forceGameOver()` expuestos vía `controlsRef`, sin overlay DOM propio.
-   - `reportHud()` mapea `score/lives/extra.hogares/phase`, se llama solo cuando cambia algún valor.
-     Verificable: `tsc --noEmit` pasa; el componente compila y monta sin el registro todavía tocado.
+   ```ts
+   const COLS = 16;
+   const ROWS = 14;
+   const CELL = 40; // px
+   const CANVAS_W = COLS * CELL; // 640 — se escala con CSS al contenedor
+   const CANVAS_H = ROWS * CELL; // 560
+   // Zonas (índice de fila, 0 = arriba)
+   const ROW_GOALS = 0;
+   const ROW_RIVER_TOP = 1;
+   const ROW_RIVER_BOT = 6;
+   const ROW_SAFE_MID = 7;
+   const ROW_ROAD_TOP = 8;
+   const ROW_ROAD_BOT = 12;
+   const ROW_START = 13;
+   ```
 
-4. **`components/RanariaTouchControls.tsx`** — cruceta de 4 botones (`{ up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" }`) que despachan `KeyboardEvent` sintéticos al `window`, reusando `.touch-controls`/`.touch-group`/`.touch-btn`. Verificable: revisión visual en viewport < 840px, cada botón mueve la rana una celda.
+   Tipos locales (no exportados):
 
-5. **Alta en `GAME_REGISTRY`** (`components/games/registry.ts`): `ranaria: { Game: RanariaGame, Touch: RanariaTouchControls, showLives: true, showLevel: false }`. Verificable: `tsc --noEmit` pasa; `/jugar/ranaria` deja de mostrar la arena decorativa estática.
+   ```ts
+   type Direction = "up" | "down" | "left" | "right";
+   interface Lane {
+     row: number;
+     speed: number;
+     dir: 1 | -1;
+     entities: Entity[];
+   }
+   interface Entity {
+     col: number;
+     width: number;
+     type: "car" | "truck" | "log" | "turtle";
+     submerged?: boolean;
+   }
+   interface Frog {
+     col: number;
+     row: number;
+     animating: boolean;
+     animT: number;
+     targetCol: number;
+     targetRow: number;
+   }
+   ```
 
-6. **Verificación end-to-end**: `/jugar/ranaria` jugable con teclado (4 flechas) y táctil (cruceta); PAUSA/FIN/pantalla completa funcionan vía `GamePlayer`; llegar a GAME OVER (perder las 3 vidas atropellado o cayendo fuera de un slot); guardar un puntaje y verlo reflejado en `/juego/ranaria` y `/salon?game=ranaria`; `next build` sin errores.
+3. **Construir el mapa de carriles** — función `buildLanes(level: number): Lane[]`:
+   - Carriles de carretera (filas 8–12): velocidades entre 1.5 y 4 px/frame (escaladas por nivel); sentidos alternos; entidades precargadas con huecos para que sean atravesables.
+   - Carriles de río (filas 1–6): velocidades entre 1 y 3 px/frame; troncos de 2–4 celdas con huecos de al menos 1 celda; grupos de tortugas de 2–3 con ciclo de inmersión de 3 s visible / 1.5 s bajo el agua.
+   - Cada nivel incrementa todas las velocidades en un 15 %.
+     Verificación: al imprimir el array `lanes` en consola, cada carril tiene al menos 2 entidades y los huecos son visibles.
 
-## Criterios de aceptación
+4. **Game loop principal** con `requestAnimationFrame`:
+   - `update(dt: number)`:
+     - Si `paused`, saltar toda lógica.
+     - Avanzar posición de cada entidad en su carril (`entity.col += lane.speed * lane.dir * dt / 16`); cuando una entidad sale del borde, se reintroduce por el lado opuesto (`col = -entity.width` o `col = COLS`).
+     - Si la rana no está animando: comprobar input (`pendingDir`); si hay dirección pendiente, iniciar animación (`animating = true`, `animT = 0`, calcular `targetCol/targetRow`).
+     - Si la rana está animando: avanzar `animT += dt`; si `animT >= 120`, completar salto (`col = targetCol`, `row = targetRow`, `animating = false`), resolver lógica de celda destino (detección de muerte/meta/puntuación).
+     - Si la rana está en el río y no animando: aplicar el desplazamiento horizontal de la entidad sobre la que descansa (se verifica con `getSupport(frog, lanes)`).
+     - Decrementar temporizador de ronda; si llega a 0, muerte por tiempo.
+     - Llamar callbacks de cambio de estado si el valor difiere del anterior.
 
-- [ ] La fila `games` con `id: "ranaria"` existe en Supabase con los valores definidos en el modelo de datos.
-- [ ] `GAME_REGISTRY` tiene una entrada `ranaria` que apunta a `RanariaGame`/`RanariaTouchControls`, con `showLives: true` y `showLevel: false`.
-- [ ] `/jugar/ranaria` monta el juego real (no la arena decorativa) y es jugable de punta a punta con teclado: la rana se mueve una celda por pulsación en las 4 direcciones.
-- [ ] `/jugar/ranaria` es jugable con controles táctiles (`RanariaTouchControls`) en viewport < 840px.
-- [ ] El canvas 800×600 se ve completo y centrado dentro de `.crt-screen` (4:3) y en pantalla completa.
-- [ ] El panel externo de `GamePlayer` muestra `score` y `lives` actualizados en vivo; no muestra nivel.
-- [ ] PAUSA (botón externo de `GamePlayer`) pausa/reanuda el juego sin overlay propio del motor.
-- [ ] El botón FIN de `GamePlayer`, tras confirmar, fuerza `phase: "gameover"` vía `forceGameOver()`.
-- [ ] Llegar a GAME OVER real jugando (perder las 3 vidas) dispara el modal de guardado de puntaje de `GamePlayer`.
-- [ ] Ocupar un hogar vacío suma +100 puntos visibles de inmediato en el HUD; avanzar a una fila nueva suma +10.
-- [ ] Ocupar los 5 hogares limpia los slots y el juego continúa sin interrupciones ni cambio de dificultad.
-- [ ] Guardar un puntaje se refleja, tras recargar, en `/juego/ranaria` y en `/salon?game=ranaria`, incluyendo `best`/`plays` actualizados.
-- [ ] `next build` (o `tsc --noEmit`) pasa sin errores de tipos en todos los archivos nuevos/modificados.
+   - `draw()`:
+     - Fondo por zonas: negro para carretera, azul oscuro para río, verde oscuro para filas seguras, verde claro para bocas destino.
+     - Dibujar entidades de cada carril: coches (rectángulo rojo/amarillo/azul con ruedas circulares), camiones (rectángulo gris con cabina diferenciada), troncos (rectángulo marrón con textura de líneas), tortugas visibles (círculo verde con patrón de escamas), tortugas sumergidas (contorno semitransparente).
+     - Dibujar rana: cuerpo verde brillante (elipse 28×24 px) con ojos blancos/negros (dos círculos), patas extendidas durante animación de salto.
+     - Dibujar bocas destino: rectángulo de meta verde oscuro con borde dorado; si ocupada, dibujar silueta de rana dentro.
+     - HUD interno: score top-left (fuente blanca 16 px), nivel top-center, iconos de rana top-right (un círculo verde por vida), barra de tiempo (rectángulo en fila 0, anchura proporcional al tiempo restante, color verde → amarillo → rojo).
 
-## Decisiones
+5. **Detección de colisiones y soporte**:
+   - `checkRoadCollision(frog, lanes)`: itera entidades de carriles de carretera; si `frog.col` está dentro del rango `[entity.col, entity.col + entity.width)` y `frog.row === lane.row`, devuelve `true`.
+   - `getSupport(frog, lanes)`: itera entidades de carriles de río; devuelve la entidad cuyo rango cubre la columna de la rana en el mismo carril, o `null`. Si la entidad es una tortuga con `submerged === true`, devuelve `null` (sin soporte).
+   - `checkGoal(frog, goals)`: si `frog.row === ROW_GOALS`, calcula la boca que corresponde a `frog.col`; si no está ocupada, la marca y suma puntos; si ya estaba ocupada o `frog.col` no es una boca, es muerte.
 
-- **Aspect ratio: canvas único 800×600 lógico, centrado en `.crt-screen` (4:3), sin arquitectura de dos canvas.** Motivo: la grilla 20×15 de 40px encaja nativamente en 4:3 sin necesitar panel secundario ni redibujado — igual que `AsteroidsGame.tsx`/`BloqueBusterGame.tsx`.
-- **HUD: `score`/`lives` mapeados directo; `hogares` va a `extra`; `showLevel: false`.** Motivo: esta alternativa no tiene ningún concepto de nivel/dificultad progresiva — forzar un valor fijo de `level` sería inventar un dato sin significado real, por eso se apaga `showLevel` en vez de mostrar un `1` constante.
-- **Controles: `ArrowUp/ArrowDown/ArrowLeft/ArrowRight` con movimiento discreto por celda, más `RanariaTouchControls.tsx` propio.** Motivo: el esquema de 4 direcciones no coincide con `TouchControls` existente (sin `↓`); un componente de cruceta de 4 botones es la forma más directa de cubrirlo, sin inventar gestos de drag.
-- **Pausa y fin de partida: sin overlay propio del motor, solo `togglePause()`/`forceGameOver()` vía el handle.** Motivo: regla dura de la skill — esa capa ya la provee `GamePlayer.tsx`.
-- **Sin assets**: todo el juego (rana, autos, hogares, césped) se dibuja con `fillRect`/formas simples en canvas, igual que Asteroids/Tetris. Motivo: mantener el esfuerzo de implementación bajo, coherente con ser la alternativa mínima; no hay sprites ni sonido que portar.
-- **Metadata de la fila `games` reusada íntegramente de `lib/archived-games.ts` (`ranaria`/`RANARIA`/`cover-rana`/`green`/`ARCADE`).** Motivo: la entrada archivada ya describe exactamente este concepto de juego (cruzar autopista y río) y su clase CSS de portada ya existe en `app/globals.css` — reusarla evita redactar metadata nueva y evita duplicar `cover-rana` bajo otro nombre. El desajuste entre el texto `long` (menciona río) y el alcance real de esta alternativa (sin río) se documenta como riesgo aceptado, no se reescribe el texto para no romper la equivalencia con la alternativa hermana que sí usa un id distinto (`ranaria-rio`) para su propia fila.
-- **Condición de fin de partida real: sí, alcanzable.** Perder la tercera vida (por atropello o por llegar a la fila 0 fuera de un slot) fuerza `phase: "gameover"` de forma determinística — no depende de RNG poder nunca dispararse, los carriles de autos siempre representan un riesgo real de colisión si la rana se queda quieta o se mueve mal.
+6. **Gestión de ronda completada** — `completeRound()`:
+   - Resetea la posición de la rana a `ROW_START`, columna central.
+   - Vacía las bocas ocupadas.
+   - Incrementa `level`, llama `onLevelChange(level)`.
+   - Reconstruye los carriles con `buildLanes(level)`.
+   - Resetea el temporizador.
 
-## Riesgos identificados
+7. **Gestión de muerte** — `killFrog()`:
+   - Decrementa `lives`.
+   - Llama `onLivesChange(lives)`.
+   - Si `lives === 0`: llama `onLivesChange(0)`, luego `onGameOver(score)`, detiene el loop.
+   - Si `lives > 0`: resetea la posición de la rana a `ROW_START`, columna central; resetea temporizador.
 
-- **El texto `long` reusado de `lib/archived-games.ts` menciona "troncos a la deriva en el río", mecánica que esta alternativa concreta no implementa.** Mitigación: ninguna en este spec — es un desajuste de copy aceptado; se puede ajustar en una edición menor si se nota desalineado en producción, o dejarlo así si finalmente se aprueba la alternativa hermana (`ranaria-rio`) en su lugar, que sí cumple la descripción completa.
-- **El cooldown de movimiento discreto (ej. 120ms) puede sentirse impreciso si se calibra mal** — muy corto y el jugador pierde control fino cerca de autos; muy largo y se siente lento/injusto frente a la velocidad de los carriles. Mitigación: valor ajustable en una sola constante del componente, calibrar jugando contra los carriles más rápidos antes de dar el spec por completo.
-- **Sin progresión de dificultad, la partida puede sentirse repetitiva en sesiones largas** (los 5 carriles siempre tienen la misma velocidad). Mitigación: ninguna en este spec — es la contrapartida esperada de mantener el esfuerzo bajo; la alternativa hermana (`ranaria-rio`) cubre exactamente este caso con progresión de nivel.
-- **El `INSERT` público sin restricciones en `scores` (ya documentado en spec 06) aplica igual a los puntajes de Ranaria** — cualquiera puede mandar un score arbitrario sin jugar. Mitigación: ninguna nueva en este spec, mismo riesgo aceptado que el resto de los juegos portados.
+8. **Crear `app/games/frogger/play/page.tsx`** — play-page específica:
+   - Importa `FroggerGame` con `dynamic(..., { ssr: false })`.
+   - Estado local: `score`, `lives` (inicial `3`), `level`, `paused`, `over`, `name`, `saved`, `gameKey`.
+   - Pasa `paused` y los cuatro callbacks a `FroggerGame`.
+   - Reutiliza el layout visual de la plataforma (HUD React + CRT + modal game over), igual que las play-pages de Asteroids, Tetris, Arkanoid, Snake y Space Invaders.
+   - Modal game over: pre-rellena nombre desde `localStorage.getItem('av_player_name')`; al confirmar, guarda en `localStorage` e inserta en Supabase `{ game_id: 'frogger', player_name: name, score, user_id: null }`.
+   - Botón de guardar se deshabilita tras el primer envío.
+   - Botón "JUGAR DE NUEVO" incrementa `gameKey` para remontar `FroggerGame`.
+     Verificación: el HUD React refleja score, vidas y nivel en tiempo real.
+
+9. **Verificación final** — `npm run build` termina sin errores de TypeScript. Ninguna ruta existente devuelve 500.
+
+---
+
+## Acceptance criteria
+
+- [ ] La fila `frogger` existe en la tabla `games` de Supabase con los valores del data model.
+- [ ] La card de Frogger aparece en `/games` con cover `cover-frogger` y color `lime`.
+- [ ] La ruta `/games/frogger/play` carga sin errores de SSR ni de TypeScript.
+- [ ] El canvas (640 × 560) se renderiza con las tres zonas visualmente diferenciadas (carretera, río, zonas seguras, bocas destino).
+- [ ] La rana aparece centrada en la fila de inicio al cargar la partida.
+- [ ] La rana salta exactamente una celda (40 px) por pulsación de tecla de dirección con animación de 120 ms.
+- [ ] La rana no puede salir por los bordes laterales.
+- [ ] Los coches y camiones se mueven horizontalmente en loop por sus carriles; se reintroducen por el lado opuesto al salir.
+- [ ] Los troncos y tortugas se mueven horizontalmente en loop por sus carriles.
+- [ ] Las tortugas alternan entre visible y sumergida con el ciclo definido.
+- [ ] La rana muere al ser alcanzada por un vehículo de carretera.
+- [ ] La rana muere al caer al agua (no estar sobre tronco ni tortugas visibles).
+- [ ] La rana muere cuando la tortuga que la soporta se sumerge.
+- [ ] La rana muere al agotar el temporizador de ronda.
+- [ ] Al morir, `onLivesChange(lives - 1)` se dispara; la rana vuelve a la fila de inicio.
+- [ ] Al llegar a una boca libre, la boca queda marcada y se suma el bonus de puntuación.
+- [ ] Al llegar a una boca ya ocupada, la rana muere.
+- [ ] Al completar las 5 bocas, la ronda termina y comienza la siguiente con `level` incrementado.
+- [ ] `onLevelChange(level)` se dispara al iniciar cada nueva ronda.
+- [ ] La velocidad de entidades aumenta con cada nivel.
+- [ ] El temporizador de ronda disminuye con cada nivel.
+- [ ] `onScoreChange(score)` se dispara en cada cambio de puntuación.
+- [ ] El HUD interno del canvas (score, nivel, vidas-iconos, barra de tiempo) se dibuja correctamente.
+- [ ] El HUD React de la plataforma refleja en tiempo real score, vidas y nivel.
+- [ ] El botón "PAUSA" de la plataforma congela el game loop; "REANUDAR" lo reanuda.
+- [ ] Las teclas P / Esc no provocan una pausa independiente del canvas.
+- [ ] Al llegar a `lives = 0`, `onLivesChange(0)` y `onGameOver(score)` se disparan; aparece el modal React.
+- [ ] El modal pre-rellena el nombre desde `av_player_name` si existe en localStorage.
+- [ ] Al confirmar el nombre, el score se inserta en Supabase y el nombre se persiste en localStorage.
+- [ ] El botón de guardar se deshabilita tras el primer envío (sin doble inserción).
+- [ ] El botón "JUGAR DE NUEVO" reinicia la partida desde cero (nuevo `gameKey`).
+- [ ] El score guardado aparece en `/games/frogger` y en `/hall-of-fame` al recargar.
+- [ ] `npm run build` completa sin errores de TypeScript.
+- [ ] Ninguna ruta existente devuelve 500.
+
+---
+
+## Decisions
+
+- **Sí: Primitivas canvas sin sprites bitmap** — coches, camiones, troncos, tortugas y rana se dibujan con formas geométricas canvas y colores temáticos. Razón: no existen assets de Frogger en el repositorio; dibujar por código elimina dependencias de carga de imágenes y permite ajustar visual sin archivos externos.
+
+- **Sí: Cuadrícula discreta de 40 px con animación de salto de 120 ms** — el movimiento de la rana es celda a celda, no continuo. Razón: mecánica canónica de Frogger; el movimiento discreto simplifica enormemente la detección de colisiones y el soporte en el río al comparar filas/columnas enteras.
+
+- **Sí: Doble HUD** — el canvas conserva su HUD interno y React muestra los mismos valores en el HUD de la plataforma. Razón: coherencia con el patrón establecido en todos los juegos de la plataforma.
+
+- **Sí: 3 vidas** — Frogger original arranca con 3 vidas. `onLivesChange` notifica cada pérdida. Razón: fiel a la mecánica clásica; coherente con Arkanoid y Space Invaders.
+
+- **Sí: Tortugas con ciclo de inmersión** — alternan entre soporte y peligro con temporizador independiente por grupo. Razón: mecánica diferenciadora de Frogger respecto a un río de sólo troncos; añade gestión de riesgo sin complejidad de implementación excesiva.
+
+- **Sí: Temporizador de ronda** — 15 s iniciales, decrementados en niveles altos. La muerte por tiempo añade urgencia. Razón: mecánica original de Frogger; impide que el jugador espere indefinidamente en la zona segura.
+
+- **Sí: 5 bocas destino** — requieren llenarse todas para completar la ronda. Razón: mecánica original que da estructura de objetivo claro por ronda sin ser un nivel único lineal.
+
+- **Sí: Canvas 640 × 560 px (16 × 14 celdas de 40 px)** — relación de aspecto vertical cercana a la original. Razón: el mapa de Frogger es vertical (el jugador avanza hacia arriba); un canvas más ancho que alto no representaría bien el recorrido.
+
+- **Sí: Play-page específica `app/games/frogger/play/page.tsx`** — en lugar de la ruta genérica `[id]/play`. Razón: coherencia con todos los juegos anteriores; Next.js App Router da prioridad a rutas estáticas sobre dinámicas.
+
+- **Sí: `dynamic(..., { ssr: false })`** — el componente canvas se carga solo en cliente. Razón: `canvas` y `requestAnimationFrame` no existen en el entorno Node.js de Next.js SSR.
+
+- **No: Movimiento continuo (interpolado)** — la rana no se desliza; salta de celda en celda. Razón: la interpolación continua requeriría colisiones AABB en espacio continuo para el río y la carretera, aumentando la complejidad sin añadir diversión.
+
+- **No: Cocodrilo disfrazado de tronco ni mosca bonus en bocas** — se cubren en el spec secundario de power-ups y eventos. Razón: son capas de dificultad y recompensa independientes de la mecánica base.
+
+- **No: Componente genérico `CanvasGame`** — cada juego tiene su componente propio. Razón: YAGNI.
+
+- **No: RLS en este spec** — las tablas quedan abiertas (INSERT y SELECT públicos). Razón: se mitiga en el spec futuro de seguridad.
+
+- **No: Realtime en leaderboards** — los scores se ven al recargar. Razón: la complejidad de subscriptions no aporta valor mientras haya pocos jugadores activos.

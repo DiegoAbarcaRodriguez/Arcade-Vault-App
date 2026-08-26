@@ -10,6 +10,8 @@ import TetrisTouchControls from "@/components/TetrisTouchControls";
 import BloqueBusterGame from "@/components/BloqueBusterGame";
 import SerpentinaGame from "@/components/SerpentinaGame";
 import SerpentinaTouchControls from "@/components/SerpentinaTouchControls";
+import FroggerGame from "@/components/FroggerGame";
+import FroggerTouchControls from "@/components/FroggerTouchControls";
 import type { Skin } from "@/lib/games/skins";
 
 /**
@@ -35,6 +37,7 @@ export interface GameHudState {
 export interface GameHandle {
   togglePause: () => void;
   forceGameOver: () => void; // usado por el botón FIN tras confirmar
+  restart: () => void; // usado por "JUGAR DE NUEVO" en la pantalla de GAME OVER
   // Solo presente en juegos con skins; GamePlayer lo llama desde el
   // <SkinSelector> que renderiza en su HUD (fuera del canvas) en
   // escritorio. En mobile, el propio juego sigue mostrando su overlay
@@ -82,6 +85,12 @@ export const GAME_REGISTRY: Record<string, GameEntry> = {
   serpentina: {
     Game: SerpentinaGame,
     Touch: SerpentinaTouchControls,
+    showLives: true,
+    showLevel: true,
+  },
+  frogger: {
+    Game: FroggerGame,
+    Touch: FroggerTouchControls,
     showLives: true,
     showLevel: true,
   },
