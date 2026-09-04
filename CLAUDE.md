@@ -15,13 +15,13 @@ This project uses **Next.js 16.2.11**, which has breaking changes vs. older Next
 
 ## Skills
 
-Project-local skills live in both `.agents/skills/` and `.claude/skills/` (duplicated between the two):
+Project-local skills live in both `.agents/skills/` and `.claude/skills/` (duplicated between the two), each defined in its own `SKILL.md`. Read that file before relying on a skill's exact behavior:
 
-- **`frontend-design`** — usa siempre /frontend-design para disenar la interfaz de usuario.
-- **`spec`** — interactive spec design (see Spec-driven workflow below).
-- **`spec-impl`** — implements an approved spec (see Spec-driven workflow below).
-- **`spec-impl-game`** (`.claude/skills/spec-impl-game/`, not duplicated in `.agents/skills/`) — same four phases as `/spec-impl`, specialized for game specs: searches `specs/` recursively (so it finds `specs/game-jam/<juego>/NN-slug.md` too) and, once the plan's last step is implemented, automatically chains `skin-designer` then `mobile-designer` for the game's id — always sequentially, one `Task` call at a time, never in parallel, since both agents write to the same game files. See Adding a new playable game below.
-- **`add-game`** — designs the spec for a new playable game, either ported from `resources/` or from a from-scratch description (see Adding a new playable game below).
+- **`frontend-design`** (`.claude/skills/frontend-design/SKILL.md`) — usa siempre `/frontend-design` para diseñar la interfaz de usuario.
+- **`spec`** (`.agents/skills/spec/SKILL.md`) — interactive spec design (see Spec-driven workflow below). Never writes code.
+- **`spec-impl`** (`.agents/skills/spec-impl/SKILL.md`) — implements an approved spec, one plan step at a time (see Spec-driven workflow below).
+- **`spec-impl-game`** (`.claude/skills/spec-impl-game/SKILL.md`, not duplicated in `.agents/skills/`) — same four phases as `/spec-impl`, specialized for game specs: searches `specs/` recursively (so it finds `specs/game-jam/<juego>/NN-slug.md` too) and, once the plan's last step is implemented, automatically chains `skin-designer` then `mobile-designer` for the game's id — always sequentially, one `Task` call at a time, never in parallel, since both agents write to the same game files. See Adding a new playable game below.
+- **`add-game`** (`.claude/skills/add-game/SKILL.md`, plus `reference.md` with the exact game contracts) — designs the spec for a new playable game, either ported from `resources/` or from a from-scratch description (see Adding a new playable game below). Never writes code.
 
 ## Agentes
 
@@ -30,6 +30,7 @@ Project-local subagents live in `.claude/agents/`:
 - **`game-planner`** (`.claude/agents/game-planner.md`) — decides _which_ game should be added next (as opposed to `/add-game`, which decides _how_). Analyzes the current catalog (`components/games/registry.ts`, `lib/archived-games.ts`, the `games` table) and returns an argued recommendation plus discarded alternatives; never writes specs or code. Keeps a running memory of every suggestion (proposed/implemented/discarded) in `resources/game-suggestions-todo.md` so it never re-proposes something already evaluated. Flow: `game-planner` (proposes) → `/add-game` (designs the spec for the chosen game) → human review `Draft`→`Approved` → `/spec-impl` (implements).
 - **`skin-designer`** (`.claude/agents/skin-designer.md`) — implements and verifies the three visual skins (`clasico`, `retro`, `neon`) for a game explicitly named by whoever invokes it; never runs on the whole catalog unprompted. Writes production code (`lib/games/skins.ts`, `components/games/SkinSelector.tsx`, per-game palettes inside `components/<Juego>Game.tsx`). Keeps coverage state in `resources/game-with-themes.md`.
 - **`mobile-designer`** (`.claude/agents/mobile-designer.md`) — implements and verifies the mobile version (responsive layout + on-screen touch pad, following the `components/TouchControls.tsx` pattern from `asteroides`) for a game explicitly named by whoever invokes it; never runs on the whole catalog unprompted. Registers new `components/<Juego>TouchControls.tsx` components in `Touch:` on `GAME_REGISTRY`, and verifies the result with the Playwright MCP (mobile viewport resize + screenshots under `.playwright-screenshots/`). Keeps coverage state in `resources/game-with-mobile-version.md`.
+- **`game-jam`** (`.claude/agents/game-jam.md`) — given the title or a short description of _one concrete game_, designs **2 mutually exclusive implementation alternatives of that same game** (same concept/goal, different engine/mechanics scope and effort) and writes a full spec for each under `specs/game-jam/<game-id>/NN-slug.md` in `Draft`. The user picks one to implement. Never writes code or migrations. Complements `game-planner` (what to build) and `/add-game` (how to port a chosen game).
 
 ## Herramientas MCP
 
@@ -57,7 +58,7 @@ This project follows spec-driven design via the `/spec` and `/spec-impl` skills 
 2. A human reviews the spec and manually flips its state to `Approved`.
 3. **`/spec-impl <NN-slug>`** — refuses to run unless the spec's state means "Approved". If approved, creates/switches to branch `spec-NN-slug` (controlled by `AutoCreateBranch` in `specs/.spec-config.yml`, default `true`), then implements the plan one step at a time, pausing for review after each step.
 
-`specs/` currently holds, in order: `01-vistas-mvp`, `02-home-page`, `03-about-contact`, `04-supabase-setup`, `05-asteroids-jugable`, `06-leaderboard-y-juegos`, `07-tetris-jugable`, `08-bloque-buster-jugable`, `09-serpentina-jugable`. When picking up work in this repo, check `specs/` for existing specs and their state before starting new feature work.
+`specs/` currently holds, in order: `01-vistas-mvp`, `02-home-page`, `03-about-contact`, `04-supabase-setup`, `05-asteroids-jugable`, `06-leaderboard-y-juegos`, `07-tetris-jugable`, `08-bloque-buster-jugable`, `09-serpentina-jugable`. Game-jam alternatives live in their own subtree, `specs/game-jam/<game-id>/NN-slug.md`, with numbering that restarts per folder — currently `specs/game-jam/frogger/` holds `01-ranaria-jugable` (**Implementado** — shipped as the `frogger` game), `02-ranaria-rio-jugable` (`Draft`, the expanded alternative, not implemented) and `03-fix-glow-performance` (`Draft`). When picking up work in this repo, check `specs/` recursively for existing specs and their state before starting new feature work.
 
 ### Adding a new playable game
 
@@ -65,11 +66,14 @@ Games are wired through a shared multi-game contract: `components/games/registry
 
 Games implemented so far (registered in `GAME_REGISTRY`):
 
-- **`asteroides`** — `components/AsteroidsGame.tsx` + `components/TouchControls.tsx`. Lives + level HUD.
-- **`tetris`** — `components/TetrisGame.tsx` + `components/TetrisTouchControls.tsx`. No lives, has level HUD.
-- **`bloque-buster`** — `components/BloqueBusterGame.tsx`. No touch controls yet. Lives + level HUD.
-- **`serpentina`** — `components/SerpentinaGame.tsx` + `components/SerpentinaTouchControls.tsx`. Lives + level HUD.
+- **`asteroides`** — `components/AsteroidsGame.tsx` + `components/TouchControls.tsx`. Lives + level HUD. 3 skins.
+- **`tetris`** — `components/TetrisGame.tsx` + `components/TetrisTouchControls.tsx`. No lives, has level HUD. 3 skins.
+- **`bloque-buster`** — `components/BloqueBusterGame.tsx`. Lives + level HUD. 3 skins. No `Touch:` entry yet — the paddle already responds to direct `touchmove`/`touchstart` on the canvas, but there's no on-screen button to launch the ball or pause.
+- **`serpentina`** — `components/SerpentinaGame.tsx` + `components/SerpentinaTouchControls.tsx`. Lives + level HUD. 3 skins.
+- **`frogger`** — `components/FroggerGame.tsx` + `components/FroggerTouchControls.tsx` (4-arrow d-pad). Lives + level HUD. 3 skins. Built from scratch (no `resources/` prototype); spec `specs/game-jam/frogger/01-ranaria-jugable.md`. Mobile version verified with Playwright.
+
+Skin coverage (three skins per game: `clasico`, `retro`, `neon`) is tracked in `resources/game-with-themes.md`; mobile/touch coverage in `resources/game-with-mobile-version.md`. All five games above currently have the three skins implemented.
 
 **`/add-game <resources/ folder | game description>`** — a project skill (`.agents/skills/add-game/SKILL.md`, duplicated in `.claude/skills/add-game/`) that designs the spec for a new game: it ports an existing prototype from `resources/` (e.g. `03-tetris`, `04-arkanoid`) or takes a from-scratch description, asks the adaptation questions the contract requires (aspect ratio, HUD mapping, controls, assets, `games` row metadata), and saves `specs/NN-slug.md` in `Draft` state — same house style as `/spec`. It never writes code; run `/spec-impl-game NN-slug` afterward to implement it (or plain `/spec-impl` if you deliberately want to skip the skins/mobile chaining).
 
-Full flow for a new game: `game-planner`/`game-jam` (propose what to build) → `/add-game` (designs the spec) → human review flips `Draft`→`Approved` → **`/spec-impl-game NN-slug`** (implements the plan step by step, then automatically runs `skin-designer` and `mobile-designer`, in that order, for the game's id).
+Full flow for a new game: `game-planner` (proposes _which_ game to add next) → then either `/add-game` (designs a single spec for the chosen game — ports from `resources/` or from a description) or `game-jam` (designs 2 competing implementation specs of one concrete game under `specs/game-jam/<game-id>/`, user picks one) → human review flips `Draft`→`Approved` → **`/spec-impl-game NN-slug`** (implements the plan step by step, then automatically runs `skin-designer` and `mobile-designer`, in that order, for the game's id).
