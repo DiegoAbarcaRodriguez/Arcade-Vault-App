@@ -6,6 +6,13 @@ import { createClient } from "@/lib/supabase/client";
 
 type Tab = "in" | "up";
 
+// Espeja el preset de Supabase Auth ("Lowercase, uppercase letters, digits and
+// symbols"): minúscula + mayúscula + dígito + símbolo ASCII, entre 8 y 72
+// caracteres (bcrypt trunca a 72 bytes). Se valida acá para dar un error claro
+// antes de llamar a signUp; Supabase lo vuelve a exigir del lado del servidor.
+const PASSWORD_RE =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!"#$%&'()*+,\-./:;<=>?@[\]^_`{|}~\\]).{8,72}$/;
+
 export default function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,6 +54,12 @@ export default function AuthForm() {
           .maybeSingle();
         if (taken) {
           setError("Ese nombre de usuario ya está en uso. Elige otro.");
+          return;
+        }
+        if (!PASSWORD_RE.test(password)) {
+          setError(
+            "La contraseña debe tener 8+ caracteres e incluir minúscula, mayúscula, dígito y símbolo.",
+          );
           return;
         }
         const { data, error } = await supabase.auth.signUp({
@@ -285,8 +298,14 @@ export default function AuthForm() {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              minLength={tab === "up" ? 8 : undefined}
               required
             />
+            {tab === "up" && (
+              <p className="auth-note" style={{ fontSize: 11, marginTop: 4 }}>
+                Mínimo 8 caracteres, con minúscula, mayúscula, dígito y símbolo.
+              </p>
+            )}
           </div>
 
           <button

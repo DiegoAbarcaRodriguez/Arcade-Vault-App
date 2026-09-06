@@ -1,6 +1,6 @@
 # Spec 10 — Registro, login y autenticación con Supabase Auth
 
-> **Estado:** Approved
+> **Estado:** Implementado
 > **Depende de:** 04-supabase-setup, 06-leaderboard-y-juegos
 > **Fecha:** 2026-09-04
 > **Objetivo:** Implementar registro y login (email+contraseña y OAuth Google/GitHub) con Supabase Auth, sesión persistente vía `proxy.ts`, recuperación de contraseña, y una tabla `profiles` con `username` editable que reemplaza el `player_name` de texto libre, de modo que solo usuarios autenticados puedan guardar puntajes.

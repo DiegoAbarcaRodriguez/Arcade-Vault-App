@@ -59,3 +59,48 @@ No se introduce ningún modelo de datos nuevo — este spec es solo configuraci�
 - **Sin credenciales reales configuradas, cualquier código futuro que use estos clientes fallará** hasta que el usuario complete `.env.local`. Mitigación: no aplica a este spec (no hay código que los consuma todavía); queda documentado para los specs futuros de Auth/leaderboard.
 - **Cambios futuros en la API de `@supabase/ssr`** (paquete relativamente nuevo, con historial de cambios entre versiones en el manejo de cookies). Mitigación: fijar la versión instalada explícitamente en `package.json` y revisar el changelog antes de actualizarla en specs futuros.
 - **Uso accidental del cliente de servidor en un Client Component** (o viceversa) en specs futuros, dado que ambos se llaman `createClient()`. Mitigación: nombres de archivo claros (`lib/supabase/client.ts` vs `lib/supabase/server.ts`) y el cliente de servidor es async (fallaría en build/tipo si se usa mal desde un Client Component).
+
+## Ajustes de seguridad de Auth (spec 11)
+
+Estos ajustes son **configuración del dashboard de Supabase**, no código: el
+MCP no los expone y no quedan versionados como migración. Hay que aplicarlos a
+mano en el proyecto (y repetirlos en cualquier entorno nuevo). Provienen del
+checklist de `resources/security/security-checklist.md` y del advisor de
+seguridad de Supabase. El punto 2 (leaked password protection) quedó **fuera de
+alcance del spec 11** y sigue pendiente.
+
+### 1. Largo mínimo de contraseña = 8
+
+- **Dónde:** Dashboard → Authentication → Policies → _Minimum password length_.
+- **Valor:** `8`.
+- **Verificación:** intentar `signUp` con una contraseña de 7 caracteres → Supabase
+  responde error (`Password should be at least 8 characters`) y no crea el usuario.
+
+### 2. Protección de contraseñas filtradas (leaked password protection) — PENDIENTE
+
+> Postergada por decisión del usuario (spec 11). El advisor sigue reportando
+> `auth_leaked_password_protection` como _disabled_; es esperado hasta que se
+> retome en un spec de hardening futuro. Cuando se active:
+
+- **Dónde:** Dashboard → Authentication → Policies → _Leaked password protection_
+  (chequeo contra HaveIBeenPwned).
+- **Valor:** habilitado.
+- **Verificación:** intentar `signUp` (o cambiar la contraseña) con una contraseña
+  conocida-filtrada como `password` → Supabase responde error
+  (`This password has been found in a data breach`). Además, `get_advisors(type:
+"security")` deja de reportar `auth_leaked_password_protection`.
+
+### 3. Rate limit de signup por IP
+
+- **Dónde:** Dashboard → Authentication → Rate Limits → límite de _sign ups / sign
+  ins_ por hora.
+- **Valor sugerido:** `10` por hora (sitio de bajo tráfico; subir temporalmente
+  durante demos o QA si hace falta).
+- **Verificación:** superar el límite desde una misma IP en una hora → Supabase
+  responde `429` (`email rate limit exceeded` / `over_request_rate_limit`).
+
+> El servicio de email por defecto de Supabase es solo para pruebas (~2
+> correos/hora y solo a miembros del proyecto). Para que cualquier persona reciba
+> el correo de confirmación hay que configurar **SMTP propio** (Authentication →
+> Emails → SMTP) — ver la enmienda "Correos de confirmación que no llegan" en
+> `specs/10-registro-login-autenticacion.md`.
