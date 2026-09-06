@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { GameWithStats } from "@/lib/supabase/queries";
 import { submitScore } from "@/lib/supabase/actions";
+import { useProfile } from "@/lib/supabase/useProfile";
+import { displayName } from "@/lib/profile";
 import {
   GAME_REGISTRY,
   type GameHandle,
@@ -18,11 +20,17 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   const gameRef = useRef<GameHandle>(null);
 
   // Estado de la pantalla "guardar puntaje" que aparece en GAME OVER.
-  const [scoreName, setScoreName] = useState("");
   const [scoreSaved, setScoreSaved] = useState(false);
   const [scoreDismissed, setScoreDismissed] = useState(false);
   const [savingScore, setSavingScore] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Sesión: solo los usuarios autenticados pueden guardar puntaje (spec 10).
+  const { user, profile, loading: authLoading } = useProfile();
+  const userId = user?.id ?? null;
+  const authChecked = !authLoading;
+  // El nombre del leaderboard es el de la cuenta; no se edita aquí.
+  const playerName = displayName(profile, user);
   // Recuerda si nosotros pausamos el juego solo para mostrar el modal de
   // FIN, para no reanudarlo si ya estaba pausado por el jugador antes.
   const autoPausedRef = useRef(false);
@@ -124,11 +132,9 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   const level = isPlayable ? (hud?.level ?? 1) : 1;
 
   // Cada vez que se sale de "gameover" (reinicio de partida), reseteamos la
-  // pantalla de guardado de puntaje para que la próxima partida vuelva a
-  // pedir nombre desde cero.
+  // pantalla de guardado de puntaje.
   useEffect(() => {
     if (hud?.phase !== "gameover") {
-      setScoreName("");
       setScoreSaved(false);
       setScoreDismissed(false);
       setSavingScore(false);
@@ -137,14 +143,18 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
   }, [hud?.phase]);
 
   const handleSaveScore = async () => {
-    if (!scoreName.trim() || savingScore) return;
+    if (savingScore) return;
     setSavingScore(true);
     setSaveError(null);
     try {
-      await submitScore(game.id, scoreName, score);
+      await submitScore(game.id, score);
       setScoreSaved(true);
-    } catch {
-      setSaveError("No se pudo guardar el puntaje. Intentá de nuevo.");
+    } catch (e) {
+      setSaveError(
+        e instanceof Error && e.message
+          ? e.message
+          : "No se pudo guardar el puntaje. Intentá de nuevo.",
+      );
     } finally {
       setSavingScore(false);
     }
@@ -207,7 +217,7 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
           <div className="hud-stat">
             <div className="l">Jugador</div>
             <div className="v" style={{ color: "var(--ink)" }}>
-              INVITADO
+              {userId ? displayName(profile, user) : "INVITADO"}
             </div>
           </div>
           <div className="hud-stat">
@@ -339,19 +349,56 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
                   </button>
                 </div>
               </>
+            ) : !authChecked ? (
+              <p
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 13,
+                  color: "var(--ink-faint)",
+                }}
+              >
+                Verificando sesión…
+              </p>
+            ) : !userId ? (
+              <>
+                <p
+                  style={{
+                    fontFamily: "var(--mono)",
+                    fontSize: 13,
+                    color: "var(--ink-faint)",
+                  }}
+                >
+                  Inicia sesión para guardar tu puntaje.
+                </p>
+                <div className="actions">
+                  <Link href="/auth" className="btn magenta">
+                    INICIAR SESIÓN
+                  </Link>
+                  <button type="button" className="btn" onClick={handleRestart}>
+                    JUGAR DE NUEVO
+                  </button>
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => setScoreDismissed(true)}
+                  >
+                    CERRAR
+                  </button>
+                </div>
+              </>
             ) : (
               <>
-                <div className="input-row">
-                  <input
-                    type="text"
-                    value={scoreName}
-                    onChange={(e) => setScoreName(e.target.value)}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onKeyUp={(e) => e.stopPropagation()}
-                    maxLength={12}
-                    placeholder="TUS INICIALES"
-                    autoFocus
-                  />
+                <div className="final-label">GUARDANDO COMO</div>
+                <div
+                  style={{
+                    fontFamily: "var(--pixel)",
+                    fontSize: 13,
+                    color: "var(--cyan)",
+                    margin: "8px 0 4px",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {playerName}
                 </div>
                 {saveError && (
                   <p
@@ -369,7 +416,7 @@ export default function GamePlayer({ game }: { game: GameWithStats }) {
                     type="button"
                     className="btn magenta"
                     onClick={handleSaveScore}
-                    disabled={!scoreName.trim() || savingScore}
+                    disabled={savingScore}
                   >
                     {savingScore ? "GUARDANDO..." : "GUARDAR PUNTAJE"}
                   </button>

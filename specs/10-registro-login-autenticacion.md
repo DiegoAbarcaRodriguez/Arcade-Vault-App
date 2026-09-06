@@ -235,3 +235,82 @@ Convenciones:
 - Internacionalización de los textos de auth.
 
 Cada uno, si llega, va en su propio spec.
+
+## Enmienda (2026-09-05) — identidad visible desde OAuth
+
+Se revierten dos decisiones de este spec por pedido explícito del usuario:
+
+- **Ahora SÍ:** tomar el nombre visible del proveedor de Google/GitHub. El
+  trigger `handle_new_user` siembra `profiles.username` desde
+  `raw_user_meta_data` (`full_name` → `name` → `user_name` → parte local del
+  correo) en vez de dejarlo `null` para usuarios OAuth. Migración
+  `add_profile_identity_from_oauth`, con backfill que **sobrescribe** los
+  `username` ya existentes.
+- **Ahora SÍ:** avatar. Nueva columna `profiles.avatar_url` (nullable),
+  sembrada por el mismo trigger desde `avatar_url`/`picture`. El Nav
+  (`components/UserBadge.tsx`) muestra la foto del proveedor y cae a un
+  círculo con iniciales si no hay imagen o falla la carga.
+- El Nav (desktop y panel móvil) muestra avatar + nombre del usuario en
+  sesión, además del botón "Cerrar Sesión". Hook compartido
+  `lib/supabase/useProfile.ts`; helpers puros en `lib/profile.ts`. El
+  nombre truncado tiene `title` (tooltip) con el nombre completo.
+- RLS de `profiles` sigue deshabilitado y pendiente (riesgo ya anotado
+  arriba); ahora también expone `avatar_url`.
+
+### El `username` se fija al crear la cuenta y no se edita después
+
+Revierte dos decisiones del spec (nombre editable en fin de partida; sin
+unicidad):
+
+- **Único a nivel global.** Índice `profiles_username_lower_key` sobre
+  `lower(username)`, insensible a mayúsculas (`null` libre). Migración
+  `enforce_unique_profile_username`.
+- **Validado al registrarse.** `AuthForm` (registro por email) consulta
+  `profiles` antes de `signUp` y rechaza el nombre si ya existe
+  ("Ese nombre de usuario ya está en uso. Elige otro."). El índice es la
+  garantía real ante una carrera.
+- **OAuth:** el trigger `handle_new_user` siembra el nombre del proveedor
+  y, si choca, prueba "Nombre 2", "Nombre 3"… (hasta 50) y si aun así
+  falla cae a `null`.
+- **Fin de partida (`components/GamePlayer.tsx`):** ya **no** hay campo
+  editable. Se muestra "GUARDANDO COMO · <nombre de la cuenta>" en
+  solo-lectura y el botón guarda el puntaje. `submitScore` cambió a
+  `submitScore(gameId, score)` — ya no recibe ni actualiza el username.
+  El nombre del leaderboard sale del join `scores.user_id → profiles`.
+
+### Un solo puntaje por usuario y juego
+
+Revierte el modelo de `scores` (que guardaba una fila por partida):
+
+- Constraint `scores_game_user_key` unique `(game_id, user_id)`. Migración
+  `one_score_per_user_per_game`, que primero deja una sola fila por par
+  (la de mayor score).
+- `submitScore` ya no hace `insert`: llama a la RPC
+  `public.submit_score(p_game_id, p_score)` (`security definer`, usa
+  `auth.uid()`) que hace `insert ... on conflict (game_id, user_id) do
+update set score = greatest(...)`. Si el nuevo score es mayor lo
+  sobrescribe y actualiza `created_at`; si no, la fila queda intacta.
+- `getScores` no cambia: al haber una fila por usuario, el top ya no
+  repite nombres.
+
+### Correos de confirmación que no llegan
+
+Dos causas:
+
+1. **Registro con un correo ya existente** (`user_repeated_signup` en los
+   logs de Auth). Con "Confirmar correo" activo, Supabase **no envía nada**
+   y devuelve un usuario sin `identities` para no revelar si la cuenta
+   existe. `AuthForm` mostraba igual "revisa tu correo". Corregido: si
+   `data.user.identities` viene vacío, se muestra "ese correo ya está
+   registrado" y se cambia a la pestaña de login.
+2. **Servicio de email por defecto de Supabase.** Es solo para pruebas:
+   límite de ~2 correos/hora y, en proyectos nuevos, solo entrega a
+   direcciones que son miembros del proyecto/organización. Para que
+   cualquier persona reciba el correo de confirmación hay que configurar
+   **SMTP propio** en el dashboard (Authentication → Emails → SMTP). El
+   proyecto ya usa Resend para el formulario de contacto; se puede reusar:
+   host `smtp.resend.com`, puerto `465`, usuario `resend`, contraseña = la
+   API key de Resend, y un dominio verificado en Resend como remitente
+   (el `onboarding@resend.dev` solo entrega al dueño de la cuenta). Subir
+   además el rate limit en Authentication → Rate Limits. Esto es config de
+   dashboard, no de código.

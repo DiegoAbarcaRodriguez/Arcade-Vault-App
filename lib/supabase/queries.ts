@@ -113,6 +113,14 @@ export async function getGame(id: string): Promise<GameWithStats | null> {
   return { ...toGame(game as GameRow), best, plays };
 }
 
+type ScoreJoinRow = {
+  score: number;
+  created_at: string;
+  // Embed PostgREST scores -> profiles (relación muchos-a-uno vía
+  // scores.user_id -> profiles.id): devuelve objeto, no arreglo.
+  profiles: { username: string | null } | null;
+};
+
 /** Trae los mejores puntajes de un juego, ordenados de mayor a menor. */
 export async function getScores(
   gameId: string,
@@ -122,17 +130,15 @@ export async function getScores(
 
   const { data, error } = await supabase
     .from("scores")
-    .select("player_name, score, created_at")
+    .select("score, created_at, profiles(username)")
     .eq("game_id", gameId)
     .order("score", { ascending: false })
     .limit(limit);
   if (error) throw error;
 
-  return (
-    (data ?? []) as { player_name: string; score: number; created_at: string }[]
-  ).map((row, i) => ({
+  return ((data ?? []) as unknown as ScoreJoinRow[]).map((row, i) => ({
     rank: i + 1,
-    name: row.player_name,
+    name: row.profiles?.username || "Anónimo",
     score: row.score,
     date: formatDate(row.created_at),
   }));
