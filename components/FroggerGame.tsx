@@ -165,10 +165,14 @@ const SKINS: Record<Skin, FroggerPalette> = {
   // que no quede plana contra el negro — paleta reducida a esas dos familias
   // de tono en vez de los rojos/azules/marrones de `clasico`.
   retro: {
-    zoneSafe: "#062b0f",
+    // Antes "#062b0f" — a solo ~18 de distancia euclídea de zoneRiver, casi
+    // indistinguible en un monitor real (feedback: "la rana camina sobre el
+    // agua" porque no se ve dónde termina la franja segura). Más verde y
+    // brillante para leerse claramente como "tierra firme".
+    zoneSafe: "#0d4d1f",
     zoneRiver: "#04241f",
     zoneRoad: "#1a0f00",
-    zoneGoalsRow: "#062b0f",
+    zoneGoalsRow: "#0d4d1f", // mismo tono que zoneSafe (misma familia "tierra")
     goalBoxFill: "#0a4d1a",
     goalBoxBorder: "#ffb000",
     goalOccupied: "#33ff33",
@@ -196,10 +200,14 @@ const SKINS: Record<Skin, FroggerPalette> = {
   // Synthwave/arcade neón: reusa los hex que app/globals.css define para
   // --cyan/--magenta/--yellow/--green en vez de inventar tonos nuevos.
   neon: {
-    zoneSafe: "#0a0a1f",
+    // Antes "#0a0a1f" — a ~20-22 de distancia de zoneRiver y zoneRoad,
+    // mismo problema que en `retro` (ver comentario ahí). Vira a un verde
+    // oscuro que sigue leyendo "neón apagado" pero se distingue del morado
+    // del río y del casi-negro de la carretera.
+    zoneSafe: "#0c331f",
     zoneRiver: "#0f0030",
     zoneRoad: "#05050a",
-    zoneGoalsRow: "#0a0a1f",
+    zoneGoalsRow: "#0c331f", // mismo tono que zoneSafe (misma familia "tierra")
     goalBoxFill: "#1a0a35",
     goalBoxBorder: "#f5ff00",
     goalOccupied: "#00f5ff",
@@ -250,19 +258,27 @@ function makeRiverEntities(): Entity[] {
   const entities: Entity[] = [];
   let col = -4 + Math.floor(Math.random() * 4);
   while (col < COLS + 4) {
-    const isTurtle = Math.random() < 0.4;
+    // 30% tortuga (antes 40%) — se sumergen y dejan de servir de apoyo, así
+    // que bajar su proporción sube la cobertura "confiable" del carril sin
+    // amontonar más entidades.
+    const isTurtle = Math.random() < 0.3;
     const width = isTurtle
       ? Math.random() < 0.5
         ? 2
         : 3
-      : 2 + Math.floor(Math.random() * 3);
+      : 3 + Math.floor(Math.random() * 3); // troncos 3–5 celdas (antes 2–4)
     entities.push({
       col,
       width,
       type: isTurtle ? "turtle" : "log",
       submerged: false,
     });
-    col += width + 2 + Math.floor(Math.random() * 3);
+    // Hueco de 3–4 columnas (antes 2–3, subido de nuevo por feedback: seguían
+    // leyéndose "muy juntas"). Con el borde de separación que dibuja
+    // drawEntities (ver ahí) más este hueco extra, dos troncos consecutivos
+    // — incluso envolviendo por el borde — ya no se perciben como una sola
+    // masa continua. Baja la cobertura media a ~50%, todavía jugable.
+    col += width + 3 + Math.floor(Math.random() * 2);
   }
   return entities;
 }
@@ -581,6 +597,29 @@ const FroggerGame = forwardRef<GameHandle, GameComponentProps>(
         ctx!.fillStyle = palette.zoneGoalsRow; // fila de metas
         ctx!.fillRect(0, ROW_GOALS * CELL, W, CELL);
 
+        // Textura de "pasto" (matas verticales) en las dos filas seguras
+        // (media y de salida): aun con el contraste de color ya subido
+        // entre zoneSafe/zoneRiver, dos verdes oscuros lado a lado seguían
+        // leyéndose ambiguos en captura ("¿esto es pasto o es agua?" — pie
+        // de la confusión de que la franja segura "no tiene troncos porque
+        // es agua"). Un patrón que el río nunca dibuja (troncos/tortugas
+        // son formas anchas, no matas finas) hace inconfundible cuál fila es
+        // tierra firme sin depender solo del tono de fondo.
+        ctx!.strokeStyle = palette.zoneRiver;
+        ctx!.globalAlpha = 0.35;
+        ctx!.lineWidth = 2;
+        for (const grassRow of [ROW_SAFE_MID, ROW_START]) {
+          const y = grassRow * CELL;
+          for (let gx = 6; gx < W; gx += 14) {
+            const jitter = (gx * 7) % 5;
+            ctx!.beginPath();
+            ctx!.moveTo(gx, y + CELL - 4 - jitter);
+            ctx!.lineTo(gx, y + CELL - 10 - jitter);
+            ctx!.stroke();
+          }
+        }
+        ctx!.globalAlpha = 1;
+
         // Las bocas dejan libre una franja superior (0–16px) para el HUD
         // interno (drawHud dibuja ahí score/nivel/vidas/barra de tiempo) —
         // sin esto, el texto y las bocas se superponen en la fila 0.
@@ -634,6 +673,13 @@ const FroggerGame = forwardRef<GameHandle, GameComponentProps>(
             } else if (entity.type === "log") {
               ctx!.fillStyle = palette.logFill;
               ctx!.fillRect(x + 1, y + 10, w - 2, CELL - 20);
+              // Borde en el color de fondo del río: cuando dos troncos del
+              // mismo carril quedan pegados (hueco mínimo, o al envolver por
+              // el borde), este borde los sigue leyendo como piezas
+              // separadas en vez de una sola masa continua.
+              ctx!.strokeStyle = palette.zoneRiver;
+              ctx!.lineWidth = 2;
+              ctx!.strokeRect(x + 1, y + 10, w - 2, CELL - 20);
               ctx!.strokeStyle = palette.logLine;
               ctx!.lineWidth = 1;
               for (let lx = x + 6; lx < x + w - 4; lx += 8) {
@@ -644,7 +690,12 @@ const FroggerGame = forwardRef<GameHandle, GameComponentProps>(
               }
             } else {
               // turtle
-              ctx!.globalAlpha = entity.submerged ? 0.25 : 1;
+              // 0.25 (antes) casi desaparecía contra fondos oscuros como
+              // `retro`/`neon` — un carril con varias tortugas sumergidas a
+              // la vez se leía como "vacío, sin troncos ni apoyos" aunque
+              // técnicamente hubiera entidades ahí. 0.45 sigue comunicando
+              // "sumergida, no sirve de apoyo" pero se mantiene visible.
+              ctx!.globalAlpha = entity.submerged ? 0.45 : 1;
               ctx!.fillStyle = palette.turtleFill;
               const count = Math.round(entity.width);
               for (let i = 0; i < count; i++) {
@@ -653,6 +704,10 @@ const FroggerGame = forwardRef<GameHandle, GameComponentProps>(
                 ctx!.beginPath();
                 ctx!.arc(cx, cy, CELL / 2 - 6, 0, Math.PI * 2);
                 ctx!.fill();
+                // Mismo borde de separación que los troncos, ver arriba.
+                ctx!.lineWidth = 2;
+                ctx!.strokeStyle = palette.zoneRiver;
+                ctx!.stroke();
               }
               ctx!.globalAlpha = 1;
             }
